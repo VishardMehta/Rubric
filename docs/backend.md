@@ -1,0 +1,730 @@
+# Rubric backend specification
+
+FastAPI, Supabase, Gemini, Groq Whisper. Free tier throughout.
+
+This document is the implementation source of truth for the backend. Where it
+disagrees with `PROJECT.md`, this document wins.
+
+---
+
+## 1. Architecture
+
+```
+React (Vite)                    FastAPI                     External
+─────────────                   ───────                     ────────
+                                                            
+apply page  ──audio blob──▶  POST /apply
+                                  │
+                                  ├──▶ Supabase Storage  (audio)
+                                  ├──▶ Groq Whisper      (transcript)
+                                  ├──▶ Gemini            (screening)
+                                  └──▶ Supabase DB       (candidate row)
+
+interview  ──audio blob──▶  POST /interview/{token}/answer
+                                  │
+                                  ├──▶ Supabase Storage
+                                  ├──▶ Groq Whisper
+                                  ├──▶ Gemini            (next question)
+                                  └──▶ Supabase DB       (turn + state)
+
+HR pages   ──────────────▶  GET  /jobs, /candidates, ...
+                                  └──▶ Supabase DB
+```
+
+The frontend never talks to Supabase, Gemini or Groq. One boundary.
+
+**Everything is synchronous.** No task queue, no background workers. Screening
+takes 8 to 20 seconds and the request holds open for it. At demo scale this is
+correct and it removes an entire category of failure. If a later phase needs
+concurrency, that is when a queue earns its place.
+
+---
+
+## 2. Stack
+
+| Layer | Choice |
+|---|---|
+| API | FastAPI, uvicorn |
+| DB and storage | Supabase, `supabase-py`, `service_role` key |
+| LLM | Gemini Flash via `google-genai`, structured output through `response_schema` |
+| STT primary | Groq `whisper-large-v3-turbo` via the `groq` SDK |
+| STT fallback | `faster-whisper`, `base` model, local, CPU |
+| Validation | Pydantic v2 |
+| Tests | pytest |
+
+Pin the exact Gemini model id in `config.py`, not inline at call sites. Verify
+its current free-tier limits before the first client demo.
+
+Not permitted: LangChain, LangGraph, Instructor, Celery, Redis, SQLAlchemy,
+`openai-whisper`.
+
+---
+
+## 3. Schema
+
+Supabase Postgres. This supersedes the draft in `PROJECT.md`.
+
+```sql
+create extension if not exists "pgcrypto";
+
+-- Jobs -------------------------------------------------------------------
+
+create table jobs (
+  id           uuid primary key default gen_random_uuid(),
+  title        text not null,
+  description  text not null,
+  skills       text[] not null default '{}',
+  experience   text,
+  rubric       jsonb,                      -- see §5.1, null while analyzing
+  state        text not null default 'analyzing',
+  created_at   timestamptz not null default now(),
+  constraint jobs_state_check
+    check (state in ('analyzing', 'active', 'closed'))
+);
+
+-- Candidates -------------------------------------------------------------
+
+create table candidates (
+  id                uuid primary key default gen_random_uuid(),
+  job_id            uuid not null references jobs(id) on delete cascade,
+  name              text not null,
+  email             text not null,
+  audio_path        text,                  -- storage object path, not a URL
+  transcript        text,
+  screening_score   int,                   -- 0 to 100
+  screening_band    text,                  -- strong | borderline | weak
+  sub_scores        jsonb,                 -- see §5.2
+  matched_skills    text[] not null default '{}',
+  unevidenced_skills text[] not null default '{}',
+  assessment        text,                  -- prose reasoning
+  recommendation    text,                  -- shortlist | review | reject
+  state             text not null default 'applied',
+  created_at        timestamptz not null default now(),
+  constraint candidates_state_check
+    check (state in ('applied','screening','screened','approved',
+                     'rejected','interviewing','interviewed')),
+  constraint candidates_score_range
+    check (screening_score is null or screening_score between 0 and 100)
+);
+
+create index candidates_job_score_idx
+  on candidates (job_id, screening_score desc nulls last);
+
+-- Interviews -------------------------------------------------------------
+
+create table interviews (
+  id              uuid primary key default gen_random_uuid(),
+  candidate_id    uuid not null unique references candidates(id) on delete cascade,
+  token           text not null unique,
+  plan            jsonb,                   -- see §5.3
+  state_object    jsonb not null default '{}'::jsonb,  -- see §6
+  total_questions int,
+  status          text not null default 'not_started',
+  started_at      timestamptz,
+  completed_at    timestamptz,
+  created_at      timestamptz not null default now(),
+  constraint interviews_status_check
+    check (status in ('not_started','in_progress','complete','evaluated'))
+);
+
+create index interviews_token_idx on interviews (token);
+
+-- Turns ------------------------------------------------------------------
+
+create table interview_turns (
+  id                    uuid primary key default gen_random_uuid(),
+  interview_id          uuid not null references interviews(id) on delete cascade,
+  slot                  int not null,      -- 1-indexed
+  question              text not null,
+  criterion_ids         text[] not null default '{}',
+  answer_text           text,
+  answer_audio_path     text,
+  response_time_seconds int,
+  asked_at              timestamptz not null default now(),
+  answered_at           timestamptz,
+  unique (interview_id, slot)
+);
+
+-- Results ----------------------------------------------------------------
+
+create table interview_results (
+  interview_id    uuid primary key references interviews(id) on delete cascade,
+  overall_score   int not null,
+  technical_score int not null,
+  communication_score int not null,
+  experience_score int not null,
+  band            text not null,
+  strengths       text[] not null default '{}',
+  concerns        text[] not null default '{}',
+  recommendation  text not null,
+  created_at      timestamptz not null default now()
+);
+```
+
+**Storage buckets**
+
+| Bucket | Contents | Access |
+|---|---|---|
+| `introductions` | Voice introduction audio | Private. Backend issues signed URLs |
+| `answers` | Interview answer audio | Private. Backend issues signed URLs |
+
+Store the object **path** in the database, never a URL. URLs expire; paths do
+not. The API resolves a path to a signed URL at response time.
+
+**RLS** Leave enabled. The backend uses `service_role` and bypasses it. The
+frontend has no Supabase credentials at all.
+
+---
+
+## 4. API
+
+All routes are prefixed `/api`. All responses are JSON. Errors follow §9.
+
+### Jobs
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/jobs` | Create job. Runs rubric generation synchronously. Returns the job with its rubric |
+| `GET` | `/jobs` | List jobs with applicant counts |
+| `GET` | `/jobs/{job_id}` | Job with rubric and pipeline counts |
+| `POST` | `/jobs/{job_id}/rubric/regenerate` | Rebuild the rubric |
+| `GET` | `/jobs/{job_id}/candidates` | Ranked candidates, score descending |
+
+`POST /jobs` request:
+
+```json
+{
+  "title": "Senior Python Developer",
+  "description": "...",
+  "skills": ["Python", "Django", "PostgreSQL"],
+  "experience": "2 to 4 years"
+}
+```
+
+`GET /jobs/{id}/candidates` response item:
+
+```json
+{
+  "id": "...",
+  "name": "Priya Nair",
+  "email": "priya@example.com",
+  "screening_score": 84,
+  "screening_band": "strong",
+  "recommendation": "shortlist",
+  "matched_count": 9,
+  "skills_total": 11,
+  "state": "interviewed"
+}
+```
+
+The band is computed server-side and returned. The frontend never derives a
+band from a number.
+
+### Application
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/apply/{job_id}` | Public job summary for the apply page. Title only, never the rubric |
+| `POST` | `/apply/{job_id}` | Multipart: `name`, `email`, `audio`. Transcribes, screens, returns candidate id |
+
+`POST /apply/{job_id}` runs: upload audio, transcribe, screen, insert. Sets
+state to `screened` on success. On screening failure the candidate row still
+exists with state `applied` and the failure is retryable from HR.
+
+### Candidates
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/candidates/{id}` | Full detail, including a signed audio URL |
+| `POST` | `/candidates/{id}/approve` | Mint interview token, set state `approved`, return the link |
+| `POST` | `/candidates/{id}/reject` | Set state `rejected` |
+| `POST` | `/candidates/{id}/rescreen` | Retry a failed screening |
+
+### Interview
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/interview/{token}` | Session state. Drives which stage the candidate screen renders |
+| `POST` | `/interview/{token}/start` | Generate the plan, create turn 1, return question 1 |
+| `POST` | `/interview/{token}/answer` | Multipart `audio`. Transcribe, save turn, update state, return next question or completion |
+| `GET` | `/interview/{token}/result` | HR-side. Full result with turns |
+
+`GET /interview/{token}` response:
+
+```json
+{
+  "status": "in_progress",
+  "job_title": "Senior Python Developer",
+  "total_questions": 8,
+  "current_slot": 3,
+  "current_question": "You mentioned a recommendation system..."
+}
+```
+
+Returning `current_question` here is what makes reload-resume work. A candidate
+who refreshes mid-interview lands on the same question, not a restart.
+
+`POST /interview/{token}/answer` response:
+
+```json
+{
+  "status": "in_progress",
+  "next_slot": 4,
+  "next_question": "How did you evaluate that model offline?",
+  "total_questions": 8
+}
+```
+
+or, on the final turn:
+
+```json
+{ "status": "complete" }
+```
+
+Evaluation runs synchronously inside that final call. It takes 10 to 25
+seconds and the candidate screen shows `Reviewing your interview` throughout.
+
+---
+
+## 5. LLM stages
+
+Five calls. Every one uses `response_schema` with a Pydantic model. No free-text
+parsing anywhere.
+
+Prompts live in `app/prompts.py` as module-level constants, never inline.
+
+### 5.1 Rubric generation
+
+Input: title, description, skills, experience.
+
+```python
+class Criterion(BaseModel):
+    id: str            # stable slug, e.g. "python_django"
+    name: str
+    description: str
+    points: int
+
+class Rubric(BaseModel):
+    criteria: list[Criterion]
+    interview_topics: list[str]
+```
+
+Rules enforced in Python after generation:
+- 4 to 7 criteria
+- `points` sum to exactly 100
+- `id` values unique and slug-shaped
+
+On failure, retry once with the violation stated in the prompt. On second
+failure, return a retryable error. Never repair the sum silently: a rubric
+that was adjusted behind the scenes no longer matches what the model reasoned
+about.
+
+### 5.2 Screening
+
+Input: the rubric, the introduction transcript, the declared skills list.
+
+```python
+class SubScore(BaseModel):
+    criterion_id: str
+    points_awarded: int
+    points_possible: int
+    evidence: str       # a direct quote from the transcript, not a paraphrase
+
+class Screening(BaseModel):
+    sub_scores: list[SubScore]
+    total_score: int
+    matched_skills: list[str]
+    unevidenced_skills: list[str]
+    assessment: str
+    recommendation: Literal["shortlist", "review", "reject"]
+```
+
+Validated in Python:
+- every `criterion_id` exists in the rubric
+- every criterion appears exactly once
+- `points_awarded` between 0 and `points_possible`
+- `points_possible` matches the rubric
+- `sum(points_awarded) == total_score`
+- every `evidence` string appears in the transcript after whitespace
+  normalisation. A paraphrase means the model invented support for a score it
+  had already decided on
+
+A sum mismatch is a validation failure, not a rounding detail. Retry once with
+the arithmetic error stated. This is the rule that holds scores steady across
+reruns.
+
+`unevidenced_skills` is deliberately not `missing_skills`. The system knows
+what the introduction did not evidence, not what the candidate cannot do, and
+the field name should not let anyone forget that.
+
+### 5.3 Interview plan
+
+Runs once, at `POST /interview/{token}/start`.
+
+Input: the rubric, the screening result, the introduction transcript.
+
+```python
+class PlannedQuestion(BaseModel):
+    slot: int
+    intent: str                 # what this question is for
+    criterion_ids: list[str]
+    depth: Literal["opening", "probing", "deep"]
+
+class InterviewPlan(BaseModel):
+    total_questions: int        # 5 to 10
+    questions: list[PlannedQuestion]
+```
+
+Rules:
+- Slots 1 to 3 are fixed intents: background, projects, personal contribution.
+  These are planned, not generated, and their `depth` is `opening`
+- Every rubric criterion appears in at least one slot
+- `depth` progresses: no `deep` slot before slot 4
+- `total_questions` scales with rubric breadth: 4 criteria gives 6 questions,
+  7 criteria gives 9
+
+The plan is stored and never regenerated. Only question wording is dynamic.
+
+### 5.4 Turn result
+
+One call per answered turn. It does three jobs in a fixed order: score the
+answer that just arrived, extract what was learned from it, then generate the
+next question.
+
+Input: the answer transcript, the plan entry for the slot just answered, the
+plan entry for the next slot, the interview state object, the relevant rubric
+criteria.
+
+```python
+class AnswerScore(BaseModel):
+    criterion_id: str
+    points_awarded: int
+    points_possible: int
+    evidence: str          # a direct quote from the answer, not a paraphrase
+
+class TurnResult(BaseModel):
+    # Scoring first. The model must judge the answer before deciding
+    # what to ask next, so a weak answer produces a probing follow-up
+    # and a strong one moves on.
+    answer_scores: list[AnswerScore]
+    topics_identified: list[str]
+    claims_made: list[str]
+
+    # Then, and only then, the next question.
+    next_question: str
+    targets_criterion_ids: list[str]
+    anchored_on_claim: str | None
+```
+
+**Field order is load-bearing. Do not reorder.** Structured output is generated
+in declaration order, so scoring fields before question fields means the model
+has assessed the answer by the time it writes the follow-up. Reversing them
+produces questions written before the answer was understood.
+
+`evidence` must be a span quoted from the answer. A paraphrase means the model
+is inventing support for a score it already decided on. Validate that the
+evidence string appears in the transcript after whitespace normalisation, and
+retry once if it does not.
+
+Scoring incrementally, one answer at a time, rather than all at the end:
+
+- final evaluation drops from 10 to 25 seconds down to roughly 5, because it
+  aggregates rather than reads the whole transcript
+- each score is anchored to the single answer that produced it, which holds
+  steadier than one pass judging eight answers at once
+- it costs no extra API call, because the turn call was happening anyway
+
+Prompt instruction shape, following the "say what to do" rule:
+
+> Ask one question that probes {criterion names}. If the candidate has made a
+> claim listed in `claims_made` that relates to this criterion, anchor the
+> question to that specific claim and ask for a concrete detail about it. Ask
+> about something in `criteria_remaining`. Phrase it as a single direct
+> question under 30 words.
+
+Validated in Python:
+- the question is not substantially similar to any prior question, checked by
+  normalised token overlap above a threshold in `heuristics.py`
+- `targets_criterion_ids` are all real criterion ids
+
+On a repeat, regenerate once with the prior questions listed and an explicit
+instruction to ask about a different criterion.
+
+### 5.5 Evaluation
+
+Runs on the final answer submission. Because every answer was already scored in
+§5.4, this call aggregates rather than re-reads. It receives the accumulated
+per-answer scores and the transcript, and writes the narrative.
+
+```python
+class Evaluation(BaseModel):
+    technical_score: int
+    communication_score: int
+    experience_score: int
+    overall_score: int
+    strengths: list[str]
+    concerns: list[str]
+    recommendation: Literal["shortlist", "review", "reject"]
+```
+
+The three sub-scores are computed in Python from the accumulated `AnswerScore`
+rows, grouped by which rubric criteria map to each dimension. The model does
+not invent them; it receives them and writes `strengths`, `concerns` and
+`recommendation` against them.
+
+Validated:
+- all scores 0 to 100
+- `overall_score` within 2 points of the weighted average
+  (technical 0.5, communication 0.25, experience 0.25). Outside that, retry
+- 2 to 4 strengths, 1 to 4 concerns, each a complete sentence referencing
+  something the candidate actually said
+
+### 5.6 Prompt builders
+
+Prompts are functions returning a `(system, user)` tuple, not bare string
+constants:
+
+```python
+def screening_prompts(rubric: Rubric, transcript: str,
+                      declared_skills: list[str]) -> tuple[str, str]: ...
+```
+
+The builder composes state into a compact block so each call is self-contained
+and independently testable. A prompt you cannot call with fixture inputs is a
+prompt you cannot test.
+
+---
+
+## 6. Interview state object
+
+Stored on `interviews.state_object`, rewritten after every answer.
+
+```json
+{
+  "questions_asked": [
+    { "slot": 1, "criterion_ids": ["relevant_experience"],
+      "question": "Tell me about yourself..." }
+  ],
+  "answers": [
+    { "slot": 1, "transcript": "I have been working...",
+      "response_time_seconds": 9 }
+  ],
+  "topics_discussed": ["backend engineering", "recommender systems"],
+  "claims_made": [
+    "Built a recommendation system using collaborative filtering",
+    "Five years of Python experience"
+  ],
+  "criteria_covered": ["relevant_experience"],
+  "criteria_remaining": ["python_django", "sql_modelling",
+                         "system_design", "communication"],
+  "depth_by_topic": { "recommender systems": 1 }
+}
+```
+
+`topics_discussed` and `claims_made` are extracted by the same Gemini call that
+generates the next question, returned as part of a wrapper model, so answer
+analysis costs no extra request. Keep the extraction fields out of
+`NextQuestion` itself and put both inside a single `TurnResult` response model.
+
+Cap `claims_made` at 12 entries, most recent first. An unbounded state object
+grows the prompt every turn until latency becomes visible.
+
+---
+
+## 7. Speech to text
+
+```python
+def transcribe(audio: bytes, filename: str) -> str:
+    """Groq primary, faster-whisper fallback, in that order."""
+```
+
+**Groq path.** `whisper-large-v3-turbo`. Typically under 2 seconds for a
+2-minute clip.
+
+**Fallback triggers:** HTTP 429, HTTP 5xx, timeout above 15 seconds, or any
+connection error. Never fall back on a 4xx that indicates a bad file; that is
+a real error and should surface.
+
+**Local path.** `faster-whisper`, `base`, `compute_type="int8"`, CPU. Roughly
+20 to 40 seconds for a 2-minute clip. Load the model once at process start,
+not per request.
+
+**Formats.** Chrome sends `audio/webm;codecs=opus`, Safari sends `audio/mp4`.
+Both are accepted by Groq directly. Pass the correct filename extension through
+so the API infers the container. `faster-whisper` needs `ffmpeg` present.
+
+**Limits.** Reject uploads above 20MB with a clear error. A 2-minute opus clip
+is well under 2MB, so anything near the limit is a client bug.
+
+---
+
+## 8. DEMO_MODE
+
+`DEMO_MODE=1` replays recorded responses instead of calling any external
+service.
+
+```
+tests/cassettes/
+  golden/
+    rubric.json          rubric generation for the golden job
+    screening.json       screening for the golden candidate
+    plan.json            interview plan
+    turn_02.json ...     one per generated question
+    evaluation.json
+    transcripts.json     audio hash to transcript
+    rows.json            Supabase rows for the golden job and candidate
+```
+
+Matching: Gemini calls key on stage name plus a hash of the prompt inputs.
+Transcription keys on a hash of the audio bytes. A miss in `DEMO_MODE` raises
+loudly rather than falling through to a live call.
+
+Record with `python -m tests.record_cassettes` against a real run of the golden
+job end to end.
+
+`rows.json` matters because Supabase makes the internet a hard dependency. With
+it, the whole demo runs from a laptop on aeroplane wifi.
+
+Build this before the first client demo, not after the first failure.
+
+---
+
+## 9. Errors
+
+One error shape everywhere:
+
+```json
+{
+  "error": {
+    "code": "rubric_generation_failed",
+    "message": "The model provider did not respond in time.",
+    "retryable": true
+  }
+}
+```
+
+`message` is user-facing prose and goes straight into the UI. It never contains
+a stack trace, a provider name, a status code or a model id.
+
+| Code | HTTP | Retryable |
+|---|---|---|
+| `rubric_generation_failed` | 502 | yes |
+| `screening_failed` | 502 | yes |
+| `transcription_failed` | 502 | yes |
+| `evaluation_failed` | 502 | yes |
+| `schema_validation_failed` | 502 | yes |
+| `audio_too_large` | 413 | no |
+| `audio_unreadable` | 400 | no |
+| `invalid_token` | 404 | no |
+| `interview_already_complete` | 409 | no |
+| `job_not_active` | 409 | no |
+| `rate_limited` | 429 | yes |
+
+Log the real exception server-side with the request id. Return the prose.
+
+---
+
+## 10. Layout
+
+```
+backend/
+  app/
+    main.py            app factory, CORS, router mounting
+    config.py          settings from env, model ids, all thresholds
+    heuristics.py      named constants only, no magic numbers elsewhere
+    models.py          Pydantic response schemas for every LLM stage
+    prompts.py         prompt constants
+    llm.py             Gemini client, structured calls, retry logic
+    stt.py             Groq primary, faster-whisper fallback
+    storage.py         Supabase client, buckets, signed URLs
+    validation.py      post-generation checks for every stage
+    interview.py       plan generation, state object, turn advancement
+    scoring.py         band computation, weighted overall
+    errors.py          error codes and the exception to response mapping
+    cassettes.py       DEMO_MODE record and replay
+    api/
+      jobs.py
+      apply.py
+      candidates.py
+      interview.py
+  tests/
+    cassettes/
+    fixtures/
+    test_validation.py
+    test_interview_state.py
+    test_scoring.py
+    test_api.py
+    record_cassettes.py
+  .env.example
+  pyproject.toml
+```
+
+`heuristics.py` holds every threshold as a named constant: band boundaries,
+question-similarity threshold, criteria count bounds, claim cap, audio size
+limit, timeouts. No numeric literal with meaning appears anywhere else.
+
+---
+
+## 11. Tests
+
+Never assert on model prose. Assert structural invariants.
+
+| Test | Asserts |
+|---|---|
+| `test_rubric_points_sum` | Criteria points total exactly 100 |
+| `test_subscores_sum` | Screening sub-scores sum to the reported total |
+| `test_criteria_ids_exist` | Every referenced criterion id is in the rubric |
+| `test_plan_covers_rubric` | Every criterion appears in at least one planned slot |
+| `test_no_repeat_questions` | No generated question exceeds the similarity threshold against any prior question |
+| `test_state_object_grows_correctly` | After N answers, `criteria_covered` and `criteria_remaining` partition the criteria set |
+| `test_band_boundaries` | Scores at 44, 45, 69, 70 land in the expected bands |
+| `test_stt_falls_back_on_429` | Groq 429 routes to `faster-whisper`, 400 does not |
+
+**Consistency harness.** Score one fixture transcript five times and assert the
+range stays under the threshold in `heuristics.py`. There is no ground truth
+here, so variance is the only measurable property. This is the test that proves
+the sub-score discipline works, and the one that predicts whether a live rerun
+during a demo will embarrass anyone.
+
+**Synthetic candidate harness.** The only way to test an adaptive interviewer
+without human subjects. A scripted model plays a candidate with a fixed
+persona and plays through a full interview. A second call then grades the
+**interviewer**, not the candidate:
+
+| Check | Passes when |
+|---|---|
+| `no_repeats` | No question re-asks something already answered |
+| `coverage` | Every rubric criterion was probed at least once |
+| `anchoring` | Follow-ups reference specifics the candidate actually said |
+| `progression` | Later questions go deeper, not wider |
+| `no_leaking` | Questions do not hand the candidate the expected answer |
+
+Run against two personas: one strong, one weak and vague. The weak persona is
+the important one, because a vague answer is what makes a reactive interviewer
+loop or drift.
+
+This costs real API calls, so it runs on demand rather than in CI. Run it after
+any change to the plan or turn prompts.
+
+Adapted from the interviewer-grading approach in `IliaLarchenko/Interviewer`.
+See `docs/prior-art.md`.
+
+---
+
+## 12. Build order
+
+Matches the screen order in `docs/screens.md` where it can.
+
+| Order | Work |
+|---|---|
+| 1 | Supabase project, schema, storage buckets, `.env.example`, FastAPI skeleton, health route |
+| 2 | `stt.py` with both paths and the fallback test |
+| 3 | `llm.py`, `models.py`, `prompts.py`, rubric generation, `POST /jobs` |
+| 4 | Screening, `POST /apply`, consistency harness |
+| 5 | Interview plan, state object, turn advancement, the three interview routes |
+| 6 | Evaluation and result routes |
+| 7 | Candidate list, approve and reject, token minting |
+| 8 | `DEMO_MODE` cassettes recorded end to end |
+| 9 | README, including un-pausing Supabase as step zero |
+
+Item 8 is not optional and does not move later.
