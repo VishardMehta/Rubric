@@ -25,7 +25,8 @@ only screen where marketing language is appropriate.
 
 
           Rubric reads your job description, builds a scoring
-          rubric, and screens every applicant against it by voice.
+          rubric, and screens every resume and voice introduction
+          against it.
 
 
                         [ Open dashboard ]
@@ -34,10 +35,10 @@ only screen where marketing language is appropriate.
   ─────────────────────────────────────────────────────────────────────────
 
 
-     01  Describe the role              02  Candidates apply by voice
-         Rubric extracts the                A two minute spoken
-         criteria and assigns               introduction instead of
-         point allocations.                 a resume.
+     01  Describe the role              02  Candidates apply
+         Rubric extracts the                A resume plus a two
+         criteria and assigns               minute spoken
+         point allocations.                 introduction.
 
      03  Everyone is scored the same    04  Interview the shortlist
          Per-criterion sub-scores           Five to ten adaptive
@@ -196,7 +197,7 @@ Single state, no fake sub-steps. Typically 3 to 8 seconds.
 
   Application link
   ┌─────────────────────────────────────────────────────────┐
-  │ localhost:5173/apply/a3f2c1              [ Copy ]       │
+  │ localhost:5273/apply/a3f2c1              [ Copy ]       │
   └─────────────────────────────────────────────────────────┘
 
   [ Regenerate rubric ]                        [ Go to job ]
@@ -337,7 +338,8 @@ Split layout, scores left, evidence right.
 ```
 
 **Components** `PageHeader`, `Split` at 5:7, `ScoreHero`, `ScoreBreakdown`,
-`AudioPlayer`, `TranscriptView`, `Chip`, `Card`, `Button`, `Modal`
+`EvidenceList`, `AudioPlayer`, `TranscriptView`, `Chip`, `Card`, `Button`,
+`Modal`
 
 **Interactions**
 - `Approve for interview` mints the token, moves state to `approved`, and
@@ -346,8 +348,26 @@ Split layout, scores left, evidence right.
   not receive an interview link. This cannot be undone in the MVP.`
 - Transcript is a disclosure, collapsed by default
 - `Not evidenced` is the label for missing skills, not `Missing`. The
-  distinction is real: the system knows what the introduction did not mention,
-  not what the candidate cannot do
+  distinction is real: the system knows what neither source mentioned, not what
+  the candidate cannot do
+- **Every evidence quote is tagged with its source.** Expanding a criterion in
+  the breakdown shows the quotes that earned the points, each labelled
+  `Introduction` or `Resume` in `label` style at `ink-tertiary`. This is how HR
+  sees that a score came from a written claim rather than a spoken explanation
+- **Conflicts appear as a neutral panel**, only when non-empty:
+
+```
+  ┌──────────────────────────────────────┐
+  │  Differences between sources         │
+  │                                      │
+  │  · Resume lists 3 years at Zoho.     │
+  │    The introduction said 5 years.    │
+  └──────────────────────────────────────┘
+```
+
+  `surface-sunken` background, `ink` text, no semantic color and no warning
+  icon. The system reports the discrepancy. It does not accuse anyone, and the
+  discrepancy carries no score penalty
 
 **Post-approval state**
 
@@ -357,7 +377,7 @@ Split layout, scores left, evidence right.
 
   Interview link
   ┌─────────────────────────────────────────────────────────┐
-  │ localhost:5173/interview/9f3c...              [ Copy ]  │
+  │ localhost:5273/interview/9f3c...              [ Copy ]  │
   └─────────────────────────────────────────────────────────┘
   Send this link to the candidate. It works once and expires when
   the interview is complete.
@@ -487,10 +507,21 @@ calm.
 
   ─────────────────────────────────────────────────────────────────────────
 
+   Resume
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │                                                                     │
+   │              Drop your resume here, or choose a file                │
+   │                        PDF only, up to 5 MB                         │
+   │                                                                     │
+   └─────────────────────────────────────────────────────────────────────┘
+
+  ─────────────────────────────────────────────────────────────────────────
+
    Voice introduction
 
    Tell us who you are, what you have worked on, and what you built.
-   About two minutes is plenty.
+   About two minutes is plenty. Your resume covers where you worked;
+   this covers how you think.
 
               ┌───────────────────────────────────────┐
               │                                       │
@@ -503,8 +534,35 @@ calm.
                                                   [ Submit application ]
 ```
 
-**Components** `CandidateShell`, `TextField`, `VoiceRecorder`,
+**Components** `CandidateShell`, `TextField`, `FileDropzone`, `VoiceRecorder`,
 `AudioLevelMeter`, `Button`
+
+### Resume upload states
+
+**Idle** Dashed `hairline-strong` border, radius `xl`, 120px tall, centered
+label at `ink-secondary`. Not a card, not filled.
+
+**Selected**
+
+```
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │  priya-nair-resume.pdf   248 KB                          [ Remove ] │
+   └─────────────────────────────────────────────────────────────────────┘
+```
+
+Solid border, filename in `mono`, size in `caption`. No preview thumbnail.
+
+**Rejected** Border becomes `negative`, message replaces the caption:
+
+| Case | Message |
+|---|---|
+| Not a PDF | `Rubric reads PDF resumes. Export yours as a PDF and try again.` |
+| Over 5 MB | `That file is over 5 MB. Try exporting it again at a smaller size.` |
+| Image-only PDF | `This resume appears to be a scanned image. Upload a PDF with selectable text.` |
+
+The image-only case is caught server-side, after upload, because it needs
+extraction to detect. Return the candidate to the form with the file cleared
+and the message shown.
 
 ### Recorder states
 
@@ -542,9 +600,10 @@ design-system §17.
 ```
 
 **Submitting** Button shows a spinner, keeps width. States progress:
-`Uploading` then `Transcribing your introduction`.
+`Uploading` then `Reading your resume` then `Transcribing your introduction`.
 
-**Validation** Submit is disabled until name, email and a recording exist. A
+**Validation** Submit is disabled until name, email, a resume and a recording
+all exist. A
 recording under 20 seconds warns rather than blocks:
 `That is quite short. Longer introductions score more reliably.`
 

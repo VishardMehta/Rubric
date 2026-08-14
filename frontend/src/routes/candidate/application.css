@@ -1,0 +1,97 @@
+/*
+ * The application screen. docs/screens.md section 6.
+ *
+ * Single column at every width, no cards. Four groups - identity, resume,
+ * voice introduction, submit - separated by hairlines rather than boxed,
+ * so the form reads as one continuous sheet rather than a stack of panels.
+ */
+
+.rb-apply {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.rb-apply__header {
+  text-align: center;
+}
+
+.rb-apply__title {
+  margin: 0;
+}
+
+.rb-apply__eyebrow {
+  margin: var(--space-2) 0 0;
+}
+
+.rb-apply__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.rb-apply__resume,
+.rb-apply__voice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Reuses the field-label type role without pulling in FieldShell, which is
+   built around a single input and label pairing this is not. */
+.rb-apply__label {
+  margin: 0;
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  line-height: var(--text-body-strong-line-height);
+  color: var(--color-ink);
+}
+
+.rb-apply__voice-copy {
+  margin: 0 0 var(--space-1);
+  max-width: 56ch;
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}
+
+.rb-apply__voice .rb-recorder {
+  align-self: stretch;
+}
+
+.rb-apply__submit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.rb-apply__submit-error {
+  margin: 0;
+  align-self: stretch;
+  color: var(--color-negative);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  text-align: right;
+}
+
+/* --- Compact ---------------------------------------------------------------
+ * screens.md section 6, "Responsive": single column at every width; the
+ * recorder becomes full width under 640, which it already is here, so the
+ * only change is the submit control claiming the full row so it is not a
+ * small target pinned to the right edge on a phone.
+ */
+
+@media (max-width: 639px) {
+  .rb-apply__submit {
+    align-items: stretch;
+  }
+
+  .rb-apply__submit-error {
+    text-align: left;
+  }
+
+  .rb-apply__submit .rb-button {
+    width: 100%;
+  }
+}

@@ -1,0 +1,608 @@
+"""Pydantic schemas for every LLM stage, plus the API request/response
+shapes built from them.
+
+These models are handed to Gemini as `response_schema`, so two things about
+them are load-bearing:
+
+1. **Field order is generation order.** The model fills fields in the order
+   they are declared. Where one field should inform another, the informing
+   field is declared first (see TurnResult in backend.md 5.4).
+2. **Field descriptions are prompt.** Gemini reads them. A description that
+   says what good input looks like measurably improves output, so they are
+   written for the model, not just for the next developer.
+
+Stages land phase by phase (docs/implementation-plan.md). Rubric models are
+here now; screening and interview models arrive in Phases 3 and 4.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+# ---------------------------------------------------------------------
+# Stage 1: rubric generation. backend.md 5.1
+# ---------------------------------------------------------------------
+
+
+class Criterion(BaseModel):
+    """One scoring criterion with an explicit point allocation."""
+
+    id: str = Field(
+        description=(
+            "Stable lowercase slug, words joined by underscores, derived from "
+            "the criterion name. For example python_and_django, sql_modelling, "
+            "system_design. Must be unique within the rubric."
+        )
+    )
+    name: str = Field(
+        description="Short human readable name, two to five words, in sentence case."
+    )
+    description: str = Field(
+        description=(
+            "One or two sentences stating what concrete evidence earns points "
+            "for this criterion. Name the specific things a strong candidate "
+            "would mention: technologies, scale, ownership, decisions made. "
+            "This text is reused later to score real candidates, so write it "
+            "as scoring guidance rather than as a job advert."
+        )
+    )
+    points: int = Field(
+        description=(
+            "Whole number of points allocated to this criterion. Points across "
+            "all criteria must total exactly 100. Weight criteria by how much "
+            "they actually matter for this role."
+        )
+    )
+    dimension: Literal["technical", "communication", "experience"] = Field(
+        description=(
+            "Which of the three reported dimensions this criterion belongs to. "
+            "Use technical for hands-on skill with tools, languages, systems "
+            "and design. Use communication for explaining work, writing, "
+            "mentoring, collaboration and stakeholder handling. Use experience "
+            "for track record: years, seniority, domain exposure, ownership of "
+            "shipped work. Every rubric needs at least one criterion in each "
+            "of the three."
+        )
+    )
+
+
+class Rubric(BaseModel):
+    """The contract. Every downstream score is computed against this and
+    nothing else - see CLAUDE.md "Core rule"."""
+
+    criteria: list[Criterion] = Field(
+        description=(
+            "Between 4 and 7 criteria covering the distinct capabilities this "
+            "role requires. Each criterion should be assessable from what a "
+            "candidate says about their experience. Prefer criteria about "
+            "demonstrable skill and applied experience."
+        )
+    )
+    interview_topics: list[str] = Field(
+        description=(
+            "Three to six short topics worth probing in a live interview, "
+            "phrased as subject areas rather than as questions."
+        )
+    )
+
+    def criterion_ids(self) -> set[str]:
+        return {c.id for c in self.criteria}
+
+    def total_points(self) -> int:
+        return sum(c.points for c in self.criteria)
+
+    def by_id(self, criterion_id: str) -> Criterion | None:
+        for criterion in self.criteria:
+            if criterion.id == criterion_id:
+                return criterion
+        return None
+
+    def by_dimension(self, dimension: str) -> list[Criterion]:
+        return [c for c in self.criteria if c.dimension == dimension]
+
+
+# ---------------------------------------------------------------------
+# Stage 3: interview plan. backend.md 5.3
+# ---------------------------------------------------------------------
+
+
+class PlannedQuestion(BaseModel):
+    """One slot in the interview plan.
+
+    The plan is generated once, before the first question, and never
+    changes. What adapts is the *wording* of each question, produced at the
+    moment it is asked from the interview state. The plan guarantees the
+    interview covers the whole rubric; the state guarantees each question
+    is specific to what the candidate actually said.
+    """
+
+    slot: int = Field(description="Position in the interview, starting at 1.")
+    intent: str = Field(
+        description=(
+            "One short sentence stating what this question is for, written for "
+            "the interviewer rather than the candidate. For example 'Probe how "
+            "they handled query performance at scale'."
+        )
+    )
+    criterion_ids: list[str] = Field(
+        description=(
+            "The rubric criterion ids this slot is meant to probe, copied "
+            "exactly. Usually one, at most two."
+        )
+    )
+    depth: Literal["opening", "probing", "deep"] = Field(
+        description=(
+            "opening for the first three orienting questions, probing for "
+            "questions that ask for specifics, deep for questions that press "
+            "on tradeoffs and edge cases. Depth may not decrease as slots "
+            "advance, and deep may not appear before slot 4."
+        )
+    )
+
+
+class InterviewPlan(BaseModel):
+    questions: list[PlannedQuestion] = Field(
+        description=(
+            "One entry per slot, in order, starting at slot 1. Slots 1 to 3 "
+            "are fixed openers: slot 1 asks the candidate to introduce "
+            "themselves and their background, slot 2 asks about a project they "
+            "worked on, slot 3 asks what their personal contribution to it "
+            "was. Plan the remaining slots so that every rubric criterion is "
+            "probed at least once across the whole interview, spending the "
+            "extra slots on criteria where the screening evidence was thin."
+        )
+    )
+
+    def slot(self, number: int) -> PlannedQuestion | None:
+        for question in self.questions:
+            if question.slot == number:
+                return question
+        return None
+
+
+# ---------------------------------------------------------------------
+# Stage 4: turn result. backend.md 5.4
+# ---------------------------------------------------------------------
+
+
+class AnswerScore(BaseModel):
+    """Points for one criterion, from a single answer.
+
+    Same field ordering rule as SubScore: evidence before points, so the
+    quote is found before the number is chosen.
+    """
+
+    criterion_id: str = Field(description="Criterion being scored, copied exactly.")
+    evidence: str = Field(
+        description=(
+            "One continuous span copied word for word from this answer, "
+            "supporting the points below. Leave empty only when awarding 0."
+        )
+    )
+    points_awarded: int = Field(
+        description="Whole number from 0 to points_possible, justified by the evidence."
+    )
+    points_possible: int = Field(
+        description="Points this criterion is worth in the rubric, copied exactly."
+    )
+
+
+class AnswerAnalysis(BaseModel):
+    """Everything learned from the answer that just arrived.
+
+    Used on its own for the final turn, where there is no next question to
+    generate, and inherited by TurnResult for every other turn.
+    """
+
+    answer_scores: list[AnswerScore] = Field(
+        description=(
+            "Score this answer against the criteria the question was meant to "
+            "probe. One entry per criterion probed. Award 0 where the answer "
+            "did not address it."
+        )
+    )
+    topics_identified: list[str] = Field(
+        description=(
+            "Short topic labels for what this answer was about, two to five "
+            "words each, for example 'recommender systems' or 'query "
+            "optimisation'."
+        )
+    )
+    claims_made: list[str] = Field(
+        description=(
+            "Specific factual claims the candidate made that are worth probing "
+            "later, one sentence each. For example 'Built a recommendation "
+            "system using collaborative filtering'. These become the anchors "
+            "for later follow-up questions, so prefer concrete, checkable "
+            "claims over general statements."
+        )
+    )
+
+
+class TurnResult(AnswerAnalysis):
+    """Scoring and extraction, then the next question.
+
+    Field order is load-bearing and inherited deliberately: everything in
+    AnswerAnalysis is generated first, so the model has assessed the answer
+    before it decides what to ask next. A weak answer should produce a
+    follow-up that presses; a strong one should move on.
+    """
+
+    next_question: str = Field(
+        description=(
+            "The next question, as a single direct question under 30 words, "
+            "addressed to the candidate. Ask about the criteria this slot "
+            "targets. Where the candidate has made a related claim, anchor the "
+            "question to that specific claim and ask for a concrete detail "
+            "about it, for example 'How did you handle the cold start problem "
+            "in that recommender?'. Ask about something not yet covered, and "
+            "do not repeat a question already asked."
+        )
+    )
+    targets_criterion_ids: list[str] = Field(
+        description="The rubric criterion ids this question probes, copied exactly."
+    )
+    anchored_on_claim: str | None = Field(
+        default=None,
+        description=(
+            "The earlier claim this question builds on, copied from "
+            "claims_made, or null when the question does not build on one."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------
+# Stage 5: evaluation. backend.md 5.5
+# ---------------------------------------------------------------------
+
+
+class Evaluation(BaseModel):
+    """The narrative half of the interview result.
+
+    The three dimension scores and the overall are computed in Python from
+    the accumulated AnswerScore rows and handed to the model. It does not
+    invent them; it writes strengths, concerns and a recommendation against
+    numbers that were already derived from evidence.
+    """
+
+    strengths: list[str] = Field(
+        description=(
+            "Two to four complete sentences, each naming something the "
+            "candidate actually said and why it counted. Quote or closely "
+            "paraphrase their own words rather than describing them in the "
+            "abstract."
+        )
+    )
+    concerns: list[str] = Field(
+        description=(
+            "One to four complete sentences on what the interview did not "
+            "evidence, each pointing at a specific gap. Describe what was "
+            "missing from the answers rather than predicting how the person "
+            "would perform."
+        )
+    )
+    recommendation: Literal["shortlist", "review", "reject"] = Field(
+        description=(
+            "Your call given the scores and the transcript: shortlist for a "
+            "strong showing, review when it was mixed, reject when the answers "
+            "showed little of what the rubric asks for."
+        )
+    )
+
+
+# ---------------------------------------------------------------------
+# Stage 2: screening. backend.md 5.2
+# ---------------------------------------------------------------------
+
+
+class Evidence(BaseModel):
+    """One verbatim span supporting a score, tagged with where it came from."""
+
+    source: Literal["introduction", "resume"] = Field(
+        description=(
+            "Which document this quote came from. Use introduction for the "
+            "spoken transcript and resume for the uploaded resume text. The "
+            "quote is checked against that document, so tagging it wrongly is "
+            "treated as a failure."
+        )
+    )
+    quote: str = Field(
+        description=(
+            "One continuous span copied word for word from that source. Copy "
+            "it exactly, including wording and spelling, and keep it under "
+            "about 30 words. Quote a single unbroken passage: do not stitch "
+            "separate sentences together with an ellipsis. When a criterion "
+            "is supported in two different places, add a second evidence "
+            "entry instead of joining them."
+        )
+    )
+
+
+class SubScore(BaseModel):
+    """Points for one rubric criterion.
+
+    Field order is load-bearing and differs deliberately from the order
+    written in backend.md 5.2. `evidence` is declared before
+    `points_awarded` so the model has to locate real supporting quotes
+    before it commits to a number. Declaring points first lets it pick a
+    score and then look for justification, which is the mechanism behind
+    the 15 to 20 point drift described in CLAUDE.md.
+    """
+
+    criterion_id: str = Field(
+        description="The id of the rubric criterion being scored, copied exactly."
+    )
+    evidence: list[Evidence] = Field(
+        description=(
+            "The quotes that justify the points you are about to award. Gather "
+            "these first. Include one for each distinct thing the candidate "
+            "showed for this criterion. Leave this empty only when the sources "
+            "contain nothing relevant, in which case award 0 points."
+        )
+    )
+    points_awarded: int = Field(
+        description=(
+            "Whole number of points earned, from 0 to points_possible, "
+            "justified by the evidence above. Award points for what the "
+            "evidence actually demonstrates."
+        )
+    )
+    points_possible: int = Field(
+        description="The points this criterion is worth in the rubric, copied exactly."
+    )
+
+
+class Screening(BaseModel):
+    """Result of scoring one candidate against the rubric.
+
+    Both sources are scored together in a single pass: the resume carries
+    structured facts (employers, dates, titles) the spoken introduction
+    usually will not, and the introduction carries reasoning and ownership
+    a resume cannot.
+    """
+
+    sub_scores: list[SubScore] = Field(
+        description=(
+            "Exactly one entry for every criterion in the rubric, in rubric "
+            "order. Score every criterion even when the sources say nothing "
+            "about it."
+        )
+    )
+    total_score: int = Field(
+        description=(
+            "The sum of every points_awarded above. Add them up and state the "
+            "total exactly; it is checked."
+        )
+    )
+    matched_skills: list[str] = Field(
+        description=(
+            "Required skills that either source clearly evidences, named as "
+            "they appear in the required skills list."
+        )
+    )
+    unevidenced_skills: list[str] = Field(
+        description=(
+            "Required skills neither source mentions. This records what the "
+            "documents did not cover, not a judgement that the candidate "
+            "lacks the skill."
+        )
+    )
+    resume_intro_conflicts: list[str] = Field(
+        description=(
+            "Places where the resume and the introduction disagree on a "
+            "checkable fact, such as differing tenure at an employer. Write "
+            "each as one neutral sentence stating both versions, for example "
+            "'The resume lists 3 years at Zoho, the introduction said 5 "
+            "years.' Report the difference without judging it, and do not let "
+            "it change any score. Leave empty when they agree."
+        )
+    )
+    assessment: str = Field(
+        description=(
+            "Three to five sentences for the hiring team on what the evidence "
+            "showed against the rubric, naming specific criteria. Describe "
+            "what was and was not evidenced rather than predicting whether "
+            "the person would succeed."
+        )
+    )
+    recommendation: Literal["shortlist", "review", "reject"] = Field(
+        description=(
+            "Your call given the total and the evidence: shortlist for a "
+            "strong match, review when the evidence is mixed or thin, reject "
+            "when the sources show little of what the rubric asks for."
+        )
+    )
+
+
+# ---------------------------------------------------------------------
+# API shapes for the jobs routes. backend.md section 4
+# ---------------------------------------------------------------------
+
+
+class JobCreate(BaseModel):
+    title: str
+    description: str
+    skills: list[str] = []
+    experience: str | None = None
+
+
+class JobSummary(BaseModel):
+    """Row shape for the Jobs Dashboard (screens.md section 1)."""
+
+    id: str
+    title: str
+    state: str
+    created_at: str
+    applicant_count: int = 0
+    shortlisted_count: int = 0
+    interviewed_count: int = 0
+
+
+class JobDetail(BaseModel):
+    """Full job including the rubric, for Create Job stage C and Job
+    Detail (screens.md sections 2 and 3)."""
+
+    id: str
+    title: str
+    description: str
+    skills: list[str]
+    experience: str | None
+    state: str
+    created_at: str
+    rubric: Rubric | None
+    applicant_count: int = 0
+    shortlisted_count: int = 0
+    interviewed_count: int = 0
+
+
+class PublicJobSummary(BaseModel):
+    """What an unauthenticated candidate sees on the apply page. Title
+    only - never the rubric, which would tell them exactly what to say."""
+
+    id: str
+    title: str
+    state: str
+
+
+class CandidateCreated(BaseModel):
+    """Response to a submitted application.
+
+    Deliberately carries no score, band or recommendation. The candidate
+    never sees their result (product.md section 2), so it is not sent to
+    the browser at all rather than being sent and hidden.
+    """
+
+    id: str
+    job_title: str
+
+
+class EvidenceOut(BaseModel):
+    source: str
+    quote: str
+
+
+class SubScoreOut(BaseModel):
+    """A scored criterion joined to its rubric name, so the HR breakdown
+    can show 'SQL and data modelling 14 / 20' without the frontend having
+    to look names up in the rubric itself."""
+
+    criterion_id: str
+    criterion_name: str
+    points_awarded: int
+    points_possible: int
+    evidence: list[EvidenceOut]
+
+
+class CandidateSummary(BaseModel):
+    """Row shape for the ranked list on Job Detail (screens.md section 3)."""
+
+    id: str
+    name: str
+    email: str
+    screening_score: int | None
+    screening_band: str | None
+    recommendation: str | None
+    matched_count: int
+    skills_total: int
+    state: str
+    created_at: str
+
+
+class CandidateDetail(BaseModel):
+    """Everything Candidate Detail renders (screens.md section 4)."""
+
+    id: str
+    job_id: str
+    job_title: str
+    name: str
+    email: str
+    state: str
+    created_at: str
+
+    screening_score: int | None
+    screening_band: str | None
+    recommendation: str | None
+    sub_scores: list[SubScoreOut]
+    matched_skills: list[str]
+    unevidenced_skills: list[str]
+    resume_intro_conflicts: list[str]
+    assessment: str | None
+
+    transcript: str | None
+    audio_url: str | None
+    resume_url: str | None
+    resume_text: str | None
+
+    interview_status: str | None = None
+    interview_token: str | None = None
+
+
+# ---------------------------------------------------------------------
+# Interview API shapes
+# ---------------------------------------------------------------------
+
+
+class InterviewSession(BaseModel):
+    """Drives which stage the candidate screen renders (screens.md 7).
+
+    Carries no score, band or recommendation: the candidate never sees
+    their result, so it is not sent to the browser at all.
+    """
+
+    status: str
+    job_title: str
+    candidate_name: str
+    total_questions: int | None
+    current_slot: int | None
+    current_question: str | None
+
+
+class TurnAdvanced(BaseModel):
+    """Response to a submitted answer."""
+
+    status: str
+    next_slot: int | None = None
+    next_question: str | None = None
+    total_questions: int | None = None
+
+
+class InterviewTurnOut(BaseModel):
+    slot: int
+    question: str
+    answer_text: str | None
+    criteria: list[str]
+    response_time_seconds: int | None
+    audio_url: str | None
+
+
+class InterviewResult(BaseModel):
+    """HR-facing result (screens.md section 5)."""
+
+    candidate_id: str
+    candidate_name: str
+    job_title: str
+    status: str
+    total_questions: int | None
+    completed_at: str | None
+
+    overall_score: int | None
+    technical_score: int | None
+    communication_score: int | None
+    experience_score: int | None
+    band: str | None
+    strengths: list[str]
+    concerns: list[str]
+    recommendation: str | None
+
+    turns: list[InterviewTurnOut]
+
+
+class ApprovalResult(BaseModel):
+    """Returned when HR approves a candidate for interview."""
+
+    candidate_id: str
+    state: str
+    interview_token: str
+    interview_path: str

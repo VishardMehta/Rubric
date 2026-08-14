@@ -1,0 +1,14 @@
+/* Inter, self-hosted via @fontsource - no Google Fonts network request at
+   runtime.
+
+   Latin subset only, weights 400/500/600 only. Both halves are from
+   DESIGN.md "Font loading". The unqualified `@fontsource/inter/400.css`
+   entrypoint pulls cyrillic, greek and vietnamese as well, which is nine
+   extra font files nothing in this product renders. Do not add 700+:
+   hierarchy comes from size and color, not from heavier weight. */
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-600.css";
+
+@import "./styles/tokens.css";
+@import "./styles/base.css";

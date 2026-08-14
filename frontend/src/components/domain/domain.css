@@ -1,0 +1,301 @@
+/*
+ * Domain components: the level meter, the recorder, and the microphone
+ * recovery block. docs/screens.md sections 6 and 7.
+ */
+
+/* --- AudioLevelMeter -----------------------------------------------------
+ * The canvas draws itself from real analyser data. Everything here is
+ * layout only.
+ */
+
+.rb-level-meter {
+  display: block;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* --- Live dot ------------------------------------------------------------
+ * `live`, not `negative`. A candidate mid-answer must never see the same
+ * red the interface uses for failure (DESIGN.md non-negotiable 5).
+ */
+
+.rb-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hairline-strong);
+  flex-shrink: 0;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-live-dot--on {
+  background: var(--color-live);
+  animation: rb-pulse 1s var(--ease-standard) infinite;
+}
+
+@keyframes rb-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-live-dot--on {
+    animation: none;
+  }
+}
+
+/* --- Microphone permission recovery -------------------------------------- */
+
+.rb-mic-blocked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.rb-mic-blocked__title {
+  margin: 0;
+}
+
+.rb-mic-blocked__body {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}
+
+.rb-mic-blocked .rb-button {
+  margin-top: var(--space-4);
+}
+
+/* --- VoiceRecorder -------------------------------------------------------
+ * screens.md section 6. Used by the application screen; the interview
+ * drives the same hook directly with its own single control.
+ */
+
+.rb-recorder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  width: 100%;
+}
+
+.rb-recorder__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  justify-content: center;
+}
+
+.rb-recorder__timer {
+  color: var(--color-ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-recorder__caption {
+  margin: 0;
+  min-height: var(--space-5);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  color: var(--color-ink-secondary);
+  text-align: center;
+}
+
+.rb-recorder__caption--caution {
+  color: var(--color-caution);
+}
+
+.rb-recorder__player {
+  width: 100%;
+}
+
+/* --- VoiceOrb ------------------------------------------------------------
+ * The canvas paints itself from real audio state. Everything here is
+ * layout, plus the one rule that keeps it from ever being mistaken for a
+ * control: it is not interactive and cannot be clicked or focused.
+ */
+
+.rb-orb {
+  display: block;
+  pointer-events: none;
+  /* No filter, no box-shadow, no background. The halo is drawn inside the
+     shader at low alpha; adding CSS glow on top is how this becomes the
+     neon blob design-system.md section 22 rules out. */
+}
+
+/* --- CopyLinkField -------------------------------------------------------
+ * screens.md sections 2 and 4. The URL is shown in full, never truncated:
+ * HR pastes this into an email and needs to verify it by eye first.
+ */
+
+.rb-copylink {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rb-copylink__row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.rb-copylink__input {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-secondary);
+  cursor: text;
+}
+
+.rb-copylink__help {
+  margin: 0;
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  color: var(--color-ink-secondary);
+  max-width: 68ch;
+}
+
+.rb-copylink__help--failed {
+  color: var(--color-caution);
+}
+
+/* --- RubricPanel ---------------------------------------------------------
+ * Points are neutral ink. They are allocations, not scores: nobody has
+ * earned or lost anything at the moment this is first shown.
+ */
+
+.rb-rubric {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+}
+
+.rb-rubric__row + .rb-rubric__row {
+  border-top: 1px solid var(--color-hairline);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.rb-rubric__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-rubric__name {
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  color: var(--color-ink);
+}
+
+.rb-rubric__points {
+  font-size: var(--text-score-inline-size);
+  font-weight: var(--text-score-inline-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+.rb-rubric__description {
+  margin: var(--space-1) 0 0;
+  max-width: 68ch;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  color: var(--color-ink-secondary);
+}
+
+.rb-rubric__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-hairline);
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-rubric__summary,
+.rb-transcript__summary {
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-2) 0;
+  font-size: var(--text-body-size);
+  color: var(--color-accent);
+}
+
+.rb-rubric__summary::-webkit-details-marker,
+.rb-transcript__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A disclosure triangle drawn as text, so it rotates without an icon file. */
+.rb-rubric__summary::before,
+.rb-transcript__summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: var(--space-2);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.rb-rubric__disclosure[open] > .rb-rubric__summary::before,
+.rb-transcript[open] > .rb-transcript__summary::before {
+  transform: rotate(90deg);
+}
+
+.rb-rubric__disclosure[open] > .rb-rubric {
+  margin-top: var(--space-3);
+}
+
+/* --- AudioPlayer --------------------------------------------------------- */
+
+.rb-audio {
+  width: 100%;
+  max-width: 420px;
+}
+
+.rb-audio__missing {
+  margin: 0;
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+}
+
+/* --- TranscriptView ------------------------------------------------------ */
+
+.rb-transcript__text {
+  margin: var(--space-2) 0 0;
+  max-width: 68ch;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  color: var(--color-ink);
+  /* Prose, so proportional figures rather than tabular. */
+  font-variant-numeric: normal;
+  white-space: pre-wrap;
+}
+
+.rb-transcript__pending {
+  margin: 0;
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+}

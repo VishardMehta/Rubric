@@ -1,0 +1,46 @@
+/*
+ * Layout helpers for the Phase 5 verification page only. Nothing here is
+ * imported by a product screen, and nothing here should be: if a product
+ * screen needs one of these, it belongs in a layout component instead.
+ */
+
+.kp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.kp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.kp-row--baseline {
+  align-items: baseline;
+}
+
+.kp-narrow {
+  max-width: 320px;
+}
+
+.kp-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-4);
+}
+
+.kp-swatch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.kp-swatch__chip {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+}

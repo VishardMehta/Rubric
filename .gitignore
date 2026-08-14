@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Recorded fixtures containing real API responses go in tests/cassettes and
+# ARE committed on purpose (DEMO_MODE needs them). Only ad hoc local capture
+# output is ignored here.
+backend/tests/cassettes/.local/
+
+# OS
+.DS_Store
+
+# Editors
+# .vscode/settings.json is committed on purpose: it pins the Python
+# interpreter to backend/.venv. Without it editors resolve against the
+# system Python and report every third-party import as missing.
+.vscode/*
+!.vscode/settings.json
+.idea/
+
+# Logs
+*.log

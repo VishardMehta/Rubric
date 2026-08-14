@@ -55,26 +55,27 @@ Nine screens: one landing, five HR, three candidate. Specified in
 
 ## Timeline
 
-Roughly 14 to 16 working days.
+Roughly 15 to 17 working days.
 
 | Work | Days |
 |---|---|
 | Supabase project, schema, storage, FastAPI skeleton, STT with fallback | 1.5 |
-| Rubric generation, screening, validation, consistency harness | 2 |
+| Resume extraction, rubric generation, screening, validation, consistency harness | 3 |
 | Interview plan, state object, turn advancement, evaluation | 2 |
 | Token layer, primitives, both shells | 1.5 |
 | Interview screen, `VoiceRecorder`, `AudioLevelMeter` | 2 |
-| Application screen | 1 |
+| Application screen with resume upload | 1.5 |
 | Create Job and Jobs Dashboard | 1 |
 | Job Detail and Candidate Detail | 1.5 |
 | Interview Result | 1 |
 | Landing and Interview Complete | 0.5 |
 | DEMO_MODE cassettes, end-to-end testing, README | 1.5 |
 
-This is higher than the 8 to 9 days estimated earlier in planning. Three
+This is higher than the 8 to 9 days estimated earlier in planning. Four
 reasons, all of them real: the design system is authored from scratch rather
-than adapted, the screen count went from five to nine, and a landing page was
-added. The estimate moved because the scope did.
+than adapted, the screen count went from five to nine, a landing page was
+added, and resume upload was added alongside the voice introduction. The
+estimate moved because the scope did.
 
 ## Build order
 

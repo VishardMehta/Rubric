@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rubric - Functional Requirements and Technical Architecture</title>
+<style>
+  :root{
+    --accent:#4F46E5; --accent-tint:#EEF0FE;
+    --canvas:#FAFAF9; --surface:#FFFFFF; --sunken:#F5F5F4;
+    --ink:#1A1A19; --ink2:#6B6B68; --ink3:#9A9A96;
+    --hair:#E8E8E5; --hair2:#D6D6D2;
+    --pos:#1E7B4D; --caut:#8A5A00; --neg:#A93226;
+  }
+  @page{
+    size:A4; margin:12mm 12mm 11mm 12mm;
+    @bottom-center{
+      content:"Rubric  ·  Functional Requirements and Technical Architecture  ·  " counter(page) " of " counter(pages);
+      font-family:Helvetica,Arial,sans-serif; font-size:7.5pt; color:#9A9A96;
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size:7.5pt; line-height:1.34; color:var(--ink); margin:0;
+    font-variant-numeric:tabular-nums;
+  }
+  .mast{border-bottom:1.5px solid var(--ink); padding-bottom:5px; margin-bottom:9px;}
+  .mast h1{font-size:16pt; font-weight:600; letter-spacing:-0.4px; margin:0 0 2px;}
+  .mast .sub{font-size:8pt; color:var(--ink2); margin:0;}
+  .mast .meta{font-size:7.5pt; color:var(--ink3); margin-top:5px;}
+  h2{
+    font-size:9.2pt; font-weight:600; letter-spacing:-0.2px;
+    margin:10px 0 4px; padding-bottom:2px; border-bottom:1px solid var(--hair);
+  }
+  h2 .n{color:var(--accent); margin-right:6px;}
+  h3{font-size:7.9pt; font-weight:600; margin:7px 0 3px; color:var(--ink);}
+  p{margin:0 0 5px; max-width:none;}
+  .lede{font-size:8pt; color:var(--ink2);}
+  table{width:100%; border-collapse:collapse; margin:3px 0 6px; font-size:7.2pt;}
+  th{
+    text-align:left; font-weight:600; font-size:6.8pt; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--ink2);
+    border-bottom:1px solid var(--hair2); padding:2.5px 6px 2.5px 0; vertical-align:bottom;
+  }
+  td{padding:2.5px 6px 2.5px 0; border-bottom:1px solid var(--hair); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td.id{font-weight:600; color:var(--accent); white-space:nowrap; width:52px;}
+  td.k{font-weight:500; white-space:nowrap;}
+  code,.mono{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:7.4pt;}
+  pre{
+    font-family:"SF Mono",Menlo,Consolas,monospace; font-size:6.1pt; line-height:1.3;
+    background:var(--sunken); border:1px solid var(--hair); border-radius:5px;
+    padding:7px 9px; margin:4px 0 6px; white-space:pre; overflow:hidden; color:var(--ink);
+  }
+  .grid2{display:flex; gap:14px;}
+  .grid2>div{flex:1;}
+  .box{
+    background:var(--sunken); border:1px solid var(--hair);
+    border-radius:5px; padding:7px 9px; margin:4px 0 6px;
+  }
+  .box h4{font-size:6.8pt; letter-spacing:0.06em; text-transform:uppercase;
+    color:var(--ink2); font-weight:600; margin:0 0 4px;}
+  ul{margin:2px 0 5px; padding-left:13px;}
+  li{margin-bottom:1.5px;}
+  .tag{
+    display:inline-block; font-size:6.6pt; font-weight:600; letter-spacing:0.05em;
+    text-transform:uppercase; padding:1.5px 5px; border-radius:3px;
+    background:var(--accent-tint); color:var(--accent);
+  }
+  .out{color:var(--ink2);}
+  .avoid{page-break-inside:avoid;}
+  h3{page-break-after:avoid;}
+  thead{page-break-after:avoid;}
+  tr{page-break-inside:avoid;}
+  .pb{page-break-before:always;}
+  .pb2{page-break-before:always;}
+  .foot{margin-top:9px; padding-top:6px; border-top:1px solid var(--hair);
+    font-size:7.4pt; color:var(--ink3);}
+</style>
+</head>
+<body>
+
+<div class="mast">
+  <h1>Rubric</h1>
+  <p class="sub">Functional Requirements and Technical Architecture</p>
+  <p class="meta">AI hiring system &middot; MVP specification &middot; Version 1.0 &middot; 14 August 2026</p>
+</div>
+
+<h2><span class="n">1</span>Overview</h2>
+<p class="lede">Rubric converts a job description into an explicit scoring rubric, then evaluates every applicant against that rubric and nothing else. Applicants submit a resume and a two minute voice introduction. Both are scored criterion by criterion, with every point traceable to a verbatim quote from a named source. Shortlisted candidates complete an adaptive voice interview whose questions are planned for rubric coverage and worded from what the candidate actually said.</p>
+<p>The design principle throughout: <strong>the model never emits a bare total.</strong> It emits per-criterion sub-scores that are summed and verified in code before any row is written. A single holistic number drifts 15 to 20 points between runs on identical input; anchored sub-scores hold steady. Every score in the product is reproducible and explainable.</p>
+
+<h2><span class="n">2</span>Scope</h2>
+<div class="grid2">
+  <div>
+    <h3>In scope</h3>
+    <ul>
+      <li>Job creation and automatic rubric generation</li>
+      <li>Resume upload with text extraction</li>
+      <li>In-browser voice introduction capture</li>
+      <li>Dual-source screening against the rubric</li>
+      <li>Ranked HR dashboard and candidate review</li>
+      <li>Manual HR approval gate</li>
+      <li>Adaptive voice interview, 5 to 10 questions</li>
+      <li>Interview evaluation and result review</li>
+      <li>Nine screens, two distinct user experiences</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Out of scope <span class="tag">future modules</span></h3>
+    <ul class="out">
+      <li>Webcam proctoring, face and gaze detection</li>
+      <li>Anti-cheat and integrity scoring</li>
+      <li>GitHub and LinkedIn verification</li>
+      <li>PDF report generation</li>
+      <li>Automated email delivery</li>
+      <li>HR authentication and multi-user access</li>
+      <li>Deployment, hosting, custom domain</li>
+      <li>Rubric editing by hand</li>
+    </ul>
+  </div>
+</div>
+
+<h2><span class="n">3</span>Functional requirements</h2>
+
+<h3>3.1 Job definition and rubric</h3>
+<table>
+<thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td class="id">FR-1.1</td><td>HR creates a job with title, description, required skills and experience level.</td></tr>
+<tr><td class="id">FR-1.2</td><td>The system generates a rubric of 4 to 7 named criteria with integer point allocations summing to exactly 100.</td></tr>
+<tr><td class="id">FR-1.3</td><td>A rubric whose points do not total 100 is regenerated with the violation stated, never silently corrected.</td></tr>
+<tr><td class="id">FR-1.4</td><td>The generated rubric is displayed to HR immediately on creation, with per-criterion descriptions.</td></tr>
+<tr><td class="id">FR-1.5</td><td>HR can regenerate a rubric, with a warning if applicants already exist.</td></tr>
+<tr><td class="id">FR-1.6</td><td>Each job exposes a copyable public application link.</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 Application and screening</h3>
+<table>
+<thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td class="id">FR-2.1</td><td>A candidate submits name, email, a resume PDF up to 5 MB, and a voice introduction recorded in the browser.</td></tr>
+<tr><td class="id">FR-2.2</td><td>Resume text is extracted locally. An image-only PDF is rejected with instructions rather than accepted as empty text.</td></tr>
+<tr><td class="id">FR-2.3</td><td>The introduction is transcribed by a hosted model, falling back to a local model on rate limit, server error or timeout.</td></tr>
+<tr><td class="id">FR-2.4</td><td>Resume text and transcript are scored against the same rubric in a single evaluation.</td></tr>
+<tr><td class="id">FR-2.5</td><td>Each criterion receives points and a list of verbatim evidence quotes, each tagged as originating from the resume or the introduction.</td></tr>
+<tr><td class="id">FR-2.6</td><td>Sub-scores are verified in code to sum to the reported total. A mismatch fails validation.</td></tr>
+<tr><td class="id">FR-2.7</td><td>Every evidence quote is verified to appear in the source it names. A quote attributed to the resume that exists only in the transcript fails validation.</td></tr>
+<tr><td class="id">FR-2.8</td><td>Discrepancies between resume and introduction are recorded and shown to HR as neutral observations. They carry no score penalty.</td></tr>
+<tr><td class="id">FR-2.9</td><td>Matched and unevidenced skills are listed separately. Unevidenced means neither source mentioned it, not that the candidate lacks it.</td></tr>
+<tr><td class="id">FR-2.10</td><td>A recommendation band is computed server-side and returned with the score. The frontend never derives a band from a number.</td></tr>
+</tbody>
+</table>
+
+<h3>3.3 Review and approval</h3>
+<table>
+<thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td class="id">FR-3.1</td><td>HR sees all applicants for a job ranked by screening score, with recommendation and pipeline status.</td></tr>
+<tr><td class="id">FR-3.2</td><td>The list can be filtered by recommendation band.</td></tr>
+<tr><td class="id">FR-3.3</td><td>Candidate detail shows the score, the per-criterion breakdown with source-tagged evidence, the resume, the transcript, and audio playback.</td></tr>
+<tr><td class="id">FR-3.4</td><td>Approving a candidate mints a unique, opaque, non-guessable interview token and produces a copyable link.</td></tr>
+<tr><td class="id">FR-3.5</td><td>Rejecting a candidate requires explicit confirmation.</td></tr>
+<tr><td class="id">FR-3.6</td><td>A failed screening can be retried without the candidate reapplying.</td></tr>
+</tbody>
+</table>
+
+<h3>3.4 Adaptive interview</h3>
+<table>
+<thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td class="id">FR-4.1</td><td>The interview is reachable only by its token and only once, before completion.</td></tr>
+<tr><td class="id">FR-4.2</td><td>A question plan is generated before the first question: 5 to 10 slots, every rubric criterion covered at least once, difficulty progressing from opening to deep.</td></tr>
+<tr><td class="id">FR-4.3</td><td>The first three slots have fixed intents: background, projects, personal contribution.</td></tr>
+<tr><td class="id">FR-4.4</td><td>Questions are spoken aloud by the browser and remain visible as text throughout.</td></tr>
+<tr><td class="id">FR-4.5</td><td>Recording starts automatically once the question is delivered. The candidate is never asked to press record.</td></tr>
+<tr><td class="id">FR-4.6</td><td>Each answer is transcribed and scored against its slot's criteria as it arrives, not deferred to the end.</td></tr>
+<tr><td class="id">FR-4.7</td><td>Each subsequent question is generated from carried interview state, targeting an uncovered criterion and anchored on a specific claim the candidate made.</td></tr>
+<tr><td class="id">FR-4.8</td><td>A question substantially similar to any earlier question is regenerated before being asked.</td></tr>
+<tr><td class="id">FR-4.9</td><td>Processing displays the real backend stage. No percentage bars, no timer-driven fake progress.</td></tr>
+<tr><td class="id">FR-4.10</td><td>Refreshing mid-interview resumes at the correct question. Answers are persisted per turn.</td></tr>
+<tr><td class="id">FR-4.11</td><td>An answer that fails transcription can be re-recorded in the same slot without restarting.</td></tr>
+<tr><td class="id">FR-4.12</td><td>The candidate is never shown a score, band, recommendation or evaluation.</td></tr>
+</tbody>
+</table>
+
+<h3>3.5 Evaluation</h3>
+<table>
+<thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td class="id">FR-5.1</td><td>Technical, communication and experience sub-scores are computed in code from accumulated per-answer scores. The model does not invent them.</td></tr>
+<tr><td class="id">FR-5.2</td><td>The overall score is a weighted average, verified within tolerance before being written.</td></tr>
+<tr><td class="id">FR-5.3</td><td>Strengths and concerns each reference something the candidate actually said.</td></tr>
+<tr><td class="id">FR-5.4</td><td>HR sees the full transcript with the rubric criteria each question probed and the response time per answer.</td></tr>
+</tbody>
+</table>
+
+<h2><span class="n">4</span>System architecture</h2>
+<p>Three tiers with a single trust boundary. The browser never holds a credential for any external service; every call to the database, the language model or the transcription service originates from the API layer.</p>
+
+<pre>
+  BROWSER                        API  (FastAPI)                  SERVICES
+  ─────────────────────          ──────────────────────          ─────────────────
+
+  HR shell                                                       Gemini Flash
+   Jobs, Create Job     ──▶      /api/jobs           ──────▶       rubric
+   Job Detail                    /api/candidates                   screening
+   Candidate Detail                                                interview plan
+   Interview Result                                                turn + question
+                                                                   evaluation
+  Candidate shell
+   Apply                ──▶      /api/apply          ──────▶     Groq Whisper
+    resume PDF                     pypdf   extract               turbo, hosted
+    voice intro                    Whisper transcribe                  │ 429 / 5xx
+                                   Gemini  screen                      ▼
+   Interview            ──▶      /api/interview      ──────▶     faster-whisper
+    MediaRecorder                  transcribe                    base, local CPU
+    speechSynthesis                score answer
+    AudioLevelMeter                plan next question            Supabase
+   Complete                                          ──────▶       Postgres
+                                                                   Storage x3
+  ────────────────────────────────────────────────────────────────────────────
+  No credentials in the browser  │  service_role key, backend .env only
+</pre>
+
+<div class="grid2">
+<div>
+<h3>Frontend</h3>
+<p>React with Vite, plain CSS over a token layer. Two shells that share tokens but nothing else.</p>
+<table>
+<tbody>
+<tr><td class="k">HR shell</td><td>Sidebar application. Dense tables, scannable, repeat use.</td></tr>
+<tr><td class="k">Candidate shell</td><td>Centered, no navigation. Single-use, one task at a time.</td></tr>
+<tr><td class="k">Interview</td><td>Full viewport, no chrome at all. One control on screen.</td></tr>
+</tbody>
+</table>
+<p><strong>Notable components.</strong> <code>VoiceRecorder</code> wraps native MediaRecorder and handles both Chrome webm/opus and Safari mp4 explicitly. <code>AudioLevelMeter</code> is driven by a real AnalyserNode, never a simulated waveform, because it is the candidate's only proof the microphone is working. <code>FileDropzone</code> validates type and size before upload. <code>ScoreBreakdown</code> and <code>EvidenceList</code> render per-criterion points with their source-tagged quotes.</p>
+<p>Text to speech uses the browser's own <code>speechSynthesis</code>. It costs nothing, needs no key, and has no network round trip, so questions begin immediately rather than after an API call.</p>
+</div>
+<div>
+<h3>Backend</h3>
+<p>FastAPI with Pydantic v2. Fully synchronous: no queue, no workers, no background tasks. Screening holds the request open for 8 to 20 seconds, which is correct at this scale and removes an entire class of failure.</p>
+<table>
+<tbody>
+<tr><td class="k mono">llm.py</td><td>Structured Gemini calls, retry with violation stated</td></tr>
+<tr><td class="k mono">stt.py</td><td>Hosted transcription, local fallback</td></tr>
+<tr><td class="k mono">resume.py</td><td>PDF extraction and normalisation</td></tr>
+<tr><td class="k mono">validation.py</td><td>Post-generation checks for every stage</td></tr>
+<tr><td class="k mono">interview.py</td><td>Plan, state object, turn advancement</td></tr>
+<tr><td class="k mono">scoring.py</td><td>Band computation, weighted aggregation</td></tr>
+<tr><td class="k mono">heuristics.py</td><td>Every threshold as a named constant</td></tr>
+<tr><td class="k mono">cassettes.py</td><td>Offline replay for demonstrations</td></tr>
+</tbody>
+</table>
+<p>Every numeric threshold in the system lives in one file. No literal with meaning appears anywhere else.</p>
+</div>
+</div>
+
+<h2><span class="n">5</span>Data model</h2>
+<table>
+<thead><tr><th>Table</th><th>Holds</th><th>Notable columns</th></tr></thead>
+<tbody>
+<tr><td class="k mono">jobs</td><td>Role definition and its rubric</td><td><span class="mono">rubric jsonb</span>, state</td></tr>
+<tr><td class="k mono">candidates</td><td>Applicant, both sources, screening outcome</td><td><span class="mono">resume_text</span>, <span class="mono">transcript</span>, <span class="mono">sub_scores jsonb</span>, band, state</td></tr>
+<tr><td class="k mono">interviews</td><td>Token, question plan, running state</td><td><span class="mono">plan jsonb</span>, <span class="mono">state_object jsonb</span></td></tr>
+<tr><td class="k mono">interview_turns</td><td>One row per question and answer</td><td>slot, <span class="mono">criterion_ids</span>, response time</td></tr>
+<tr><td class="k mono">interview_results</td><td>Final evaluation</td><td>overall and three sub-scores, strengths, concerns</td></tr>
+</tbody>
+</table>
+<p>Three private storage buckets hold resumes, introduction audio and answer audio. The database stores object <em>paths</em>, never URLs; the API resolves a path to a signed URL at response time. Row level security stays enabled and the backend bypasses it with a service role key held only in the server environment.</p>
+
+<h2><span class="n">6</span>AI pipeline</h2>
+<p>Five calls, each returning a validated schema. No free-text parsing anywhere in the system.</p>
+<table>
+<thead><tr><th>Stage</th><th>Input</th><th>Output</th><th>Validated on</th></tr></thead>
+<tbody>
+<tr><td class="k">Rubric</td><td>Job description, skills, experience</td><td>4 to 7 criteria with points</td><td>Points total exactly 100</td></tr>
+<tr><td class="k">Screening</td><td>Rubric, resume text, transcript</td><td>Sub-scores, evidence, conflicts, recommendation</td><td>Sum matches total; every quote found in its named source</td></tr>
+<tr><td class="k">Plan</td><td>Rubric, screening, transcript</td><td>5 to 10 planned slots</td><td>Every criterion covered; depth progresses</td></tr>
+<tr><td class="k">Turn</td><td>Answer, plan slot, interview state</td><td>Answer score, claims, next question</td><td>Question not similar to any prior; criteria exist</td></tr>
+<tr><td class="k">Evaluation</td><td>Accumulated scores, transcript</td><td>Strengths, concerns, recommendation</td><td>Overall within tolerance of weighted average</td></tr>
+</tbody>
+</table>
+
+<div class="box avoid">
+<h4>The interview state object</h4>
+<p style="margin:0">Carried into every question generation call: questions already asked, answers given, topics discussed, claims made, criteria covered, criteria remaining, and depth reached per topic. The plan guarantees the interview covers the whole rubric. The state guarantees each question is specific. Without the plan, an interview follows whatever the candidate mentioned first and leaves most criteria unprobed. Without the state, follow-ups are generic. Together they produce <em>"how did you handle the cold-start problem in that recommender"</em> instead of <em>"tell me about your experience with system design."</em></p>
+</div>
+
+<h2><span class="n">7</span>Non-functional requirements</h2>
+<table>
+<thead><tr><th>Area</th><th>Requirement</th></tr></thead>
+<tbody>
+<tr><td class="k">Cost</td><td>Free service tiers only, including during development. No paid API call at any point.</td></tr>
+<tr><td class="k">Deployment</td><td>Localhost only. No hosting, no domain.</td></tr>
+<tr><td class="k">Reliability</td><td>An offline replay mode reproduces a full demonstration from recorded responses, verified with the network disconnected.</td></tr>
+<tr><td class="k">Consistency</td><td>A test harness scores one fixture five times and asserts score range stays under threshold. Variance is the only measurable property where no ground truth exists.</td></tr>
+<tr><td class="k">Interview quality</td><td>A synthetic candidate plays through a full interview and a second pass grades the interviewer on repetition, rubric coverage, anchoring and depth progression.</td></tr>
+<tr><td class="k">Accessibility</td><td>Semantic HTML, visible focus throughout, keyboard navigable, no colour-only signals, reduced-motion respected, usable at 375 px.</td></tr>
+<tr><td class="k">Privacy</td><td>Audio and resumes in private buckets behind signed URLs. Candidates see no scores. Academic demonstration; not for screening real applicants.</td></tr>
+<tr><td class="k">Concurrency</td><td>Verified for 5 to 10 simultaneous candidates. No claim is made beyond that.</td></tr>
+</tbody>
+</table>
+
+<h2><span class="n">8</span>Delivery</h2>
+<table>
+<thead><tr><th>Phase</th><th>Work</th><th>Days</th></tr></thead>
+<tbody>
+<tr><td class="k">0</td><td>Database, storage, API skeleton, token layer</td><td>1</td></tr>
+<tr><td class="k">1</td><td>Transcription with fallback, resume extraction</td><td>1.5</td></tr>
+<tr><td class="k">2</td><td>Rubric generation and validation</td><td>1</td></tr>
+<tr><td class="k">3</td><td>Dual-source screening, consistency harness</td><td>3</td></tr>
+<tr><td class="k">4</td><td>Interview plan, state, turns, evaluation</td><td>2</td></tr>
+<tr><td class="k">5</td><td>Design foundation, primitives, both shells</td><td>1.5</td></tr>
+<tr><td class="k">6</td><td>Interview screen, recorder, level meter</td><td>2</td></tr>
+<tr><td class="k">7</td><td>Application screen with resume upload</td><td>1.5</td></tr>
+<tr><td class="k">8</td><td>Four HR screens</td><td>2.5</td></tr>
+<tr><td class="k">9</td><td>Landing and completion screens</td><td>0.5</td></tr>
+<tr><td class="k">10</td><td>Offline replay, hardening, handover</td><td>1.5</td></tr>
+</tbody>
+</table>
+<p><strong>15 to 17 working days.</strong> Work is ordered to retire risk before building surface: the AI stages and the audio pipeline are built and verified from the command line first. A complete end-to-end flow runs from a terminal at roughly day six; the first visual demonstration lands around day nine.</p>
+<p>Two gates are absolute. Frontend work does not begin until the score consistency harness passes, because a polished interface over drifting scores is worth less than a plain one over stable scores. Nothing is handed over until offline replay has been verified with the network physically disconnected.</p>
+
+<div class="foot">
+Rubric &middot; Functional Requirements and Technical Architecture &middot; Version 1.0 &middot; 14 August 2026. Detailed specifications are maintained in the project repository: design system and tokens, product structure, nine screen specifications, backend specification and sequential implementation plan.
+</div>
+
+</body>
+</html>

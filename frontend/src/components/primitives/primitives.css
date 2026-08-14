@@ -1,0 +1,559 @@
+/*
+ * Primitives. Geometry and state rules come from docs/design-system.md
+ * sections 8, 9 and 11. Values come from DESIGN.md via tokens.css.
+ *
+ * No literal color, spacing, radius or duration appears in this file. If a
+ * value is needed and no token carries it, the token layer is wrong and
+ * gets fixed there first.
+ */
+
+/* --- Button --------------------------------------------------------------
+ * design-system.md section 8. Four levels, one primary per screen region.
+ * Hover shifts the fill one step, pressed shifts one more, and neither
+ * applies a transform: a button that moves under the cursor reads as a toy.
+ */
+
+.rb-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  position: relative;
+
+  height: 40px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  line-height: 1;
+  letter-spacing: var(--text-body-strong-letter-spacing);
+  white-space: nowrap;
+
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-button--full {
+  width: 100%;
+}
+
+/* screens.md sections 6 and 7: the single candidate-facing control is
+   48px. Not a new level, only a height. */
+.rb-button--large {
+  height: 48px;
+  padding: 0 var(--space-6);
+}
+
+.rb-button--primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  padding: 0 var(--space-5);
+}
+
+.rb-button--primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.rb-button--primary:active:not(:disabled) {
+  background: var(--color-accent-pressed);
+}
+
+.rb-button--secondary {
+  background: var(--color-surface);
+  border-color: var(--color-hairline-strong);
+  color: var(--color-ink);
+}
+
+.rb-button--secondary:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.rb-button--secondary:active:not(:disabled) {
+  background: var(--color-surface-sunken);
+}
+
+.rb-button--tertiary {
+  height: 36px;
+  background: transparent;
+  color: var(--color-accent);
+  padding: 0 var(--space-3);
+}
+
+.rb-button--tertiary:hover:not(:disabled) {
+  background: var(--color-accent-tint);
+}
+
+.rb-button--tertiary:active:not(:disabled) {
+  color: var(--color-accent-pressed);
+}
+
+/* Destructive is bordered, never filled. Rejecting a person does not get a
+   red block - design-system.md section 8. */
+.rb-button--destructive {
+  background: var(--color-surface);
+  border-color: var(--color-hairline-strong);
+  color: var(--color-negative);
+}
+
+.rb-button--destructive:hover:not(:disabled) {
+  background: var(--color-negative-tint);
+  border-color: var(--color-negative);
+}
+
+.rb-button--destructive:active:not(:disabled) {
+  background: var(--color-negative-tint);
+  border-color: var(--color-negative);
+}
+
+/* A loading button is `disabled` so it cannot be double-submitted, but it
+   must not take the disabled styling: a primary that goes grey the moment
+   it is pressed reads as "this action is unavailable" rather than "this
+   action is running". Loading keeps its own fill. */
+.rb-button:disabled:not(.rb-button--loading) {
+  cursor: not-allowed;
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-disabled);
+}
+
+.rb-button--loading {
+  cursor: default;
+}
+
+/* Loading keeps the resolved width by leaving the label in flow and
+   hiding it, so the layout never jumps mid-request. */
+.rb-button__label--loading {
+  visibility: hidden;
+}
+
+.rb-button__spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- IconButton ---------------------------------------------------------- */
+
+.rb-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-icon-button:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-ink);
+}
+
+.rb-icon-button:disabled {
+  color: var(--color-ink-disabled);
+  cursor: not-allowed;
+}
+
+/* --- Field chrome, shared by TextField, TextArea, Select, TagInput -------
+ * design-system.md section 9. Every input has a visible label above it.
+ * Placeholder text is never the label, so there is no floating-label
+ * treatment here on purpose.
+ */
+
+.rb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rb-field__label {
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  line-height: var(--text-body-strong-line-height);
+  color: var(--color-ink);
+}
+
+.rb-field__optional {
+  font-weight: var(--text-body-weight);
+  color: var(--color-ink-secondary);
+}
+
+.rb-field__help {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  color: var(--color-ink-secondary);
+}
+
+/* The error message replaces the helper text rather than joining it, so
+   the field never grows taller on validation and shifts the form. */
+.rb-field__error {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  color: var(--color-negative);
+}
+
+.rb-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-input::placeholder {
+  color: var(--color-ink-tertiary);
+}
+
+.rb-input:hover:not(:disabled):not(:focus) {
+  border-color: var(--color-ink-tertiary);
+}
+
+.rb-input:focus-visible {
+  border-color: var(--color-hairline-focus);
+}
+
+.rb-input:disabled {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-disabled);
+  cursor: not-allowed;
+}
+
+.rb-input--invalid,
+.rb-input--invalid:hover:not(:disabled):not(:focus) {
+  border-color: var(--color-negative);
+}
+
+.rb-textarea {
+  height: auto;
+  min-height: 120px;
+  padding: var(--space-3);
+  resize: vertical;
+  font-family: inherit;
+}
+
+/* --- Select --------------------------------------------------------------
+ * A real <select>. A custom listbox would need keyboard and screen reader
+ * work that buys nothing here - design-system.md section 19.
+ */
+
+.rb-select-wrap {
+  position: relative;
+  display: block;
+}
+
+.rb-select {
+  appearance: none;
+  padding-right: var(--space-8);
+  cursor: pointer;
+}
+
+.rb-select-wrap__chevron {
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--color-ink-secondary);
+}
+
+/* --- TagInput ------------------------------------------------------------
+ * design-system.md section 9. Skill chips are neutral: they are data, not
+ * actions, so they never take the accent.
+ */
+
+.rb-taginput {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  height: auto;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+}
+
+.rb-taginput:focus-within {
+  border-color: var(--color-hairline-focus);
+  outline: 2px solid var(--color-accent-ring);
+  outline-offset: 2px;
+}
+
+.rb-taginput__input {
+  flex: 1 1 120px;
+  min-width: 120px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: var(--text-body-size);
+  color: var(--color-ink);
+}
+
+.rb-taginput__input:focus-visible {
+  outline: none;
+}
+
+.rb-taginput__input::placeholder {
+  color: var(--color-ink-tertiary);
+}
+
+.rb-taginput__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 24px;
+  padding: 0 var(--space-1) 0 var(--space-2);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  font-size: var(--text-caption-size);
+}
+
+.rb-taginput__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-taginput__remove:hover {
+  color: var(--color-ink);
+}
+
+/* --- Chip ----------------------------------------------------------------
+ * design-system.md section 11. Tints are backgrounds and tones are text.
+ * Nothing here is ever filled at full saturation.
+ */
+
+.rb-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption-size);
+  font-weight: 500;
+  line-height: var(--text-caption-line-height);
+  white-space: nowrap;
+}
+
+.rb-chip--neutral {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-secondary);
+}
+
+.rb-chip--positive {
+  background: var(--color-positive-tint);
+  color: var(--color-positive);
+}
+
+.rb-chip--caution {
+  background: var(--color-caution-tint);
+  color: var(--color-caution);
+}
+
+.rb-chip--negative {
+  background: var(--color-negative-tint);
+  color: var(--color-negative);
+}
+
+/* --- Spinner -------------------------------------------------------------
+ * Inherits currentColor so one component works on accent and on surface.
+ * Under reduced motion the base reset drops the animation, leaving a
+ * static ring - acceptable because a spinner never carries information
+ * that is not also in a label.
+ */
+
+.rb-spinner {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.9;
+  animation: rb-spin 640ms linear infinite;
+}
+
+.rb-spinner--sm {
+  width: 14px;
+  height: 14px;
+}
+
+.rb-spinner--md {
+  width: 18px;
+  height: 18px;
+}
+
+@keyframes rb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Divider ------------------------------------------------------------- */
+
+.rb-divider {
+  border: none;
+  margin: 0;
+  background: var(--color-hairline);
+}
+
+.rb-divider--horizontal {
+  height: 1px;
+  width: 100%;
+}
+
+.rb-divider--vertical {
+  width: 1px;
+  align-self: stretch;
+}
+
+/* --- Compact widths ------------------------------------------------------
+ * design-system.md section 19: touch targets are 44px minimum under 768px.
+ */
+
+@media (max-width: 767px) {
+  .rb-button {
+    height: 44px;
+  }
+
+  .rb-button--tertiary {
+    height: 44px;
+  }
+
+  .rb-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .rb-input {
+    height: 44px;
+  }
+
+  .rb-taginput {
+    height: auto;
+    min-height: 44px;
+  }
+
+  .rb-textarea {
+    height: auto;
+  }
+}
+
+/* --- FileDropzone ----------------------------------------------------------
+ * screens.md section 6, "Resume upload states". Idle is dashed and
+ * unfilled - deliberately not a card, so it reads as an empty slot rather
+ * than a piece of content.
+ */
+
+.rb-dropzone {
+  width: 100%;
+  min-height: 120px;
+  border-radius: var(--radius-xl);
+  border: 1.5px dashed var(--color-hairline-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-dropzone--drag {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}
+
+.rb-dropzone--rejected {
+  border-color: var(--color-negative);
+}
+
+.rb-dropzone__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6);
+  text-align: center;
+  cursor: pointer;
+}
+
+.rb-dropzone__prompt {
+  color: var(--color-ink);
+}
+
+.rb-dropzone__hint {
+  color: var(--color-ink-secondary);
+}
+
+.rb-dropzone__hint--error {
+  color: var(--color-negative);
+}
+
+/* Selected: solid border, no dashes, no centered prompt - a row of facts. */
+.rb-dropzone--selected {
+  min-height: 0;
+  border: 1px solid var(--color-hairline-strong);
+  padding: var(--space-4) var(--space-5);
+  gap: var(--space-3);
+  justify-content: flex-start;
+}
+
+.rb-dropzone__filename {
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-dropzone__filesize {
+  color: var(--color-ink-secondary);
+  flex-shrink: 0;
+}
+
+.rb-dropzone__remove {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-accent);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  cursor: pointer;
+}
+
+.rb-dropzone__remove:hover {
+  color: var(--color-accent-hover);
+}
+
+.rb-dropzone__remove:disabled {
+  color: var(--color-ink-disabled);
+  cursor: not-allowed;
+}

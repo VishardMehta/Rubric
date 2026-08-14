@@ -1,0 +1,47 @@
+[project]
+name = "rubric-backend"
+version = "0.1.0"
+description = "Rubric backend: FastAPI, Supabase, Gemini, Groq Whisper"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-multipart>=0.0.12",
+    "supabase>=2.9",
+    "google-genai>=0.3",
+    "groq>=0.11",
+    "faster-whisper>=1.0",
+    "pypdf>=5.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's dependency system is *designed* around calling Depends/File/Form
+# in argument defaults. B008 exists for the general Python case and is a
+# false positive for route signatures.
+"app/api/*.py" = ["B008"]

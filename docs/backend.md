@@ -13,11 +13,12 @@ disagrees with `PROJECT.md`, this document wins.
 React (Vite)                    FastAPI                     External
 ─────────────                   ───────                     ────────
                                                             
-apply page  ──audio blob──▶  POST /apply
-                                  │
-                                  ├──▶ Supabase Storage  (audio)
+apply page ──resume pdf──▶  POST /apply
+           ──audio blob──▶       │
+                                  ├──▶ Supabase Storage  (resume + audio)
+                                  ├──▶ pypdf             (resume text)
                                   ├──▶ Groq Whisper      (transcript)
-                                  ├──▶ Gemini            (screening)
+                                  ├──▶ Gemini            (screening, both sources)
                                   └──▶ Supabase DB       (candidate row)
 
 interview  ──audio blob──▶  POST /interview/{token}/answer
@@ -49,6 +50,7 @@ concurrency, that is when a queue earns its place.
 | LLM | Gemini Flash via `google-genai`, structured output through `response_schema` |
 | STT primary | Groq `whisper-large-v3-turbo` via the `groq` SDK |
 | STT fallback | `faster-whisper`, `base` model, local, CPU |
+| Resume text | `pypdf`, pure Python, MIT |
 | Validation | Pydantic v2 |
 | Tests | pytest |
 
@@ -91,6 +93,8 @@ create table candidates (
   email             text not null,
   audio_path        text,                  -- storage object path, not a URL
   transcript        text,
+  resume_path       text,                  -- storage object path
+  resume_text       text,                  -- extracted, see §7.1
   screening_score   int,                   -- 0 to 100
   screening_band    text,                  -- strong | borderline | weak
   sub_scores        jsonb,                 -- see §5.2
@@ -167,6 +171,7 @@ create table interview_results (
 |---|---|---|
 | `introductions` | Voice introduction audio | Private. Backend issues signed URLs |
 | `answers` | Interview answer audio | Private. Backend issues signed URLs |
+| `resumes` | Uploaded resume PDFs | Private. Backend issues signed URLs |
 
 Store the object **path** in the database, never a URL. URLs expire; paths do
 not. The API resolves a path to a signed URL at response time.
@@ -225,9 +230,10 @@ band from a number.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/apply/{job_id}` | Public job summary for the apply page. Title only, never the rubric |
-| `POST` | `/apply/{job_id}` | Multipart: `name`, `email`, `audio`. Transcribes, screens, returns candidate id |
+| `POST` | `/apply/{job_id}` | Multipart: `name`, `email`, `resume`, `audio`. Extracts, transcribes, screens, returns candidate id |
 
-`POST /apply/{job_id}` runs: upload audio, transcribe, screen, insert. Sets
+`POST /apply/{job_id}` runs: upload resume and audio, extract resume text,
+transcribe audio, screen both against the rubric, insert. Sets
 state to `screened` on success. On screening failure the candidate row still
 exists with state `applied` and the failure is retryable from HR.
 
@@ -291,7 +297,7 @@ seconds and the candidate screen shows `Reviewing your interview` throughout.
 Five calls. Every one uses `response_schema` with a Pydantic model. No free-text
 parsing anywhere.
 
-Prompts live in `app/prompts.py` as module-level constants, never inline.
+Prompts live in `app/services/prompts.py` as module-level constants, never inline.
 
 ### 5.1 Rubric generation
 
@@ -321,23 +327,41 @@ about.
 
 ### 5.2 Screening
 
-Input: the rubric, the introduction transcript, the declared skills list.
+Input: the rubric, the introduction transcript, the extracted resume text, and
+the declared skills list.
+
+**Two sources, one score.** The resume carries structured facts the spoken
+introduction usually will not: employers, dates, titles, tenure. The
+introduction carries reasoning, ownership and communication quality a resume
+cannot. Both are scored against the same rubric in a single call, and every
+piece of evidence records which source it came from.
 
 ```python
+class Evidence(BaseModel):
+    source: Literal["introduction", "resume"]
+    quote: str          # verbatim span from that source, not a paraphrase
+
 class SubScore(BaseModel):
     criterion_id: str
+    evidence: list[Evidence]   # declared before the points, deliberately
     points_awarded: int
     points_possible: int
-    evidence: str       # a direct quote from the transcript, not a paraphrase
 
 class Screening(BaseModel):
     sub_scores: list[SubScore]
     total_score: int
     matched_skills: list[str]
     unevidenced_skills: list[str]
+    resume_intro_conflicts: list[str]
     assessment: str
     recommendation: Literal["shortlist", "review", "reject"]
 ```
+
+**Field order is load-bearing here too.** `evidence` is declared before
+`points_awarded` so the model has to locate real supporting quotes before it
+commits to a number. Declaring points first lets it pick a score and then go
+looking for justification, which is the mechanism behind the 15 to 20 point
+drift in CLAUDE.md.
 
 Validated in Python:
 - every `criterion_id` exists in the rubric
@@ -345,9 +369,26 @@ Validated in Python:
 - `points_awarded` between 0 and `points_possible`
 - `points_possible` matches the rubric
 - `sum(points_awarded) == total_score`
-- every `evidence` string appears in the transcript after whitespace
-  normalisation. A paraphrase means the model invented support for a score it
-  had already decided on
+- every `quote` appears in the source it names, after whitespace
+  normalisation. A quote attributed to the resume that only exists in the
+  transcript is a validation failure, not a near miss
+- `evidence` may be empty only when `points_awarded` is 0
+
+Quote matching is case and whitespace insensitive, because transcription and
+PDF extraction both introduce line breaks a model will not reproduce byte for
+byte. A quote elided with an ellipsis is split on the ellipsis and every
+fragment must appear verbatim, which keeps grounding intact while avoiding a
+wasted retry on a habit every model has. Measured 2026-08-14: without this,
+every single screening call burned its retry budget on well founded evidence.
+
+`resume_intro_conflicts` records where the two sources disagree, for example a
+resume listing three years at an employer while the introduction says five.
+Surfaced to HR as neutral observations, never as an accusation and never as a
+score penalty. The system reports the discrepancy; the human decides what it
+means.
+
+If no resume was supplied, the call runs unchanged with an empty resume block
+and every `Evidence.source` is `introduction`.
 
 A sum mismatch is a validation failure, not a rounding detail. Retry once with
 the arithmetic error stated. This is the rule that holds scores steady across
@@ -444,7 +485,7 @@ Prompt instruction shape, following the "say what to do" rule:
 
 Validated in Python:
 - the question is not substantially similar to any prior question, checked by
-  normalised token overlap above a threshold in `heuristics.py`
+  normalised token overlap above a threshold in `app/core/heuristics.py`
 - `targets_criterion_ids` are all real criterion ids
 
 On a repeat, regenerate once with the prior questions listed and an explicit
@@ -531,7 +572,35 @@ grows the prompt every turn until latency becomes visible.
 
 ---
 
-## 7. Speech to text
+## 7. Ingestion
+
+### 7.1 Resume extraction
+
+```python
+def extract_resume(pdf: bytes) -> str:
+    """Text from a PDF resume. pypdf, pure Python, no external service."""
+```
+
+- **PDF only** in the MVP. Reject `.doc` and `.docx` with a clear message
+  asking for a PDF. Adding `docx` later is a small change; adding it now adds
+  a dependency and a format branch for a case that rarely appears
+- Maximum 5MB. Above that returns `resume_too_large`
+- Extracted text is normalised: collapse runs of whitespace, strip page
+  furniture, cap at 20,000 characters
+- **Image-only PDFs produce no text.** If extraction yields fewer than 200
+  characters, return `resume_not_readable` with the message
+  `This resume appears to be a scanned image. Upload a PDF with selectable
+  text.` Do not fall back to OCR; that is a paid service or a heavy local
+  dependency, and the candidate can fix it in ten seconds
+- The raw file is stored in the `resumes` bucket regardless, so HR can always
+  open the original
+
+`pypdf` is MIT, pure Python and has no system dependencies. Do not add
+`pydparser`, spaCy, or any resume-parsing library. Rubric does not need parsed
+fields; the screening call reads the text directly against the rubric, which is
+both simpler and better than keyword extraction.
+
+### 7.2 Speech to text
 
 ```python
 def transcribe(audio: bytes, filename: str) -> str:
@@ -614,6 +683,9 @@ a stack trace, a provider name, a status code or a model id.
 | `evaluation_failed` | 502 | yes |
 | `schema_validation_failed` | 502 | yes |
 | `audio_too_large` | 413 | no |
+| `resume_too_large` | 413 | no |
+| `resume_not_readable` | 400 | no |
+| `resume_wrong_format` | 400 | no |
 | `audio_unreadable` | 400 | no |
 | `invalid_token` | 404 | no |
 | `interview_already_complete` | 409 | no |
@@ -636,6 +708,7 @@ backend/
     prompts.py         prompt constants
     llm.py             Gemini client, structured calls, retry logic
     stt.py             Groq primary, faster-whisper fallback
+    resume.py          PDF text extraction and normalisation
     storage.py         Supabase client, buckets, signed URLs
     validation.py      post-generation checks for every stage
     interview.py       plan generation, state object, turn advancement
@@ -659,7 +732,7 @@ backend/
   pyproject.toml
 ```
 
-`heuristics.py` holds every threshold as a named constant: band boundaries,
+`app/core/heuristics.py` holds every threshold as a named constant: band boundaries,
 question-similarity threshold, criteria count bounds, claim cap, audio size
 limit, timeouts. No numeric literal with meaning appears anywhere else.
 
@@ -679,9 +752,11 @@ Never assert on model prose. Assert structural invariants.
 | `test_state_object_grows_correctly` | After N answers, `criteria_covered` and `criteria_remaining` partition the criteria set |
 | `test_band_boundaries` | Scores at 44, 45, 69, 70 land in the expected bands |
 | `test_stt_falls_back_on_429` | Groq 429 routes to `faster-whisper`, 400 does not |
+| `test_evidence_source_matches` | A quote attributed to the resume is not found only in the transcript |
+| `test_image_pdf_rejected` | A scanned PDF returns `resume_not_readable`, not an empty string |
 
 **Consistency harness.** Score one fixture transcript five times and assert the
-range stays under the threshold in `heuristics.py`. There is no ground truth
+range stays under the threshold in `app/core/heuristics.py`. There is no ground truth
 here, so variance is the only measurable property. This is the test that proves
 the sub-score discipline works, and the one that predicts whether a live rerun
 during a demo will embarrass anyone.
@@ -718,7 +793,7 @@ Matches the screen order in `docs/screens.md` where it can.
 | Order | Work |
 |---|---|
 | 1 | Supabase project, schema, storage buckets, `.env.example`, FastAPI skeleton, health route |
-| 2 | `stt.py` with both paths and the fallback test |
+| 2 | `stt.py` with both paths and the fallback test, `resume.py` extraction |
 | 3 | `llm.py`, `models.py`, `prompts.py`, rubric generation, `POST /jobs` |
 | 4 | Screening, `POST /apply`, consistency harness |
 | 5 | Interview plan, state object, turn advancement, the three interview routes |

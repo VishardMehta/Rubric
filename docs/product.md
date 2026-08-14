@@ -8,14 +8,16 @@ the boundaries are.
 ## 1. What Rubric is
 
 Rubric turns a job description into a scoring rubric, then screens and
-interviews candidates against that rubric by voice.
+interviews candidates against that rubric. Applicants submit a resume and a
+two minute voice introduction, and both are scored against the same criteria.
 
 The name is the architecture. Stage one produces a rubric with explicit point
 allocations. Every score after that is computed against those criteria and
 nothing else. There is no holistic judgement anywhere in the system.
 
 **One sentence for the landing page:** Rubric reads your job description,
-builds a scoring rubric, and screens every applicant against it by voice.
+builds a scoring rubric, and screens every resume and voice introduction
+against it.
 
 ---
 
@@ -29,8 +31,10 @@ Dense, fast, scannable. Sidebar shell.
 What HR can do:
 - Create a job and see the rubric Rubric generated from it
 - See every applicant ranked by screening score
-- Open a candidate and see the score broken down by rubric criterion, the
-  voice introduction transcript, matched and missing skills, and the reasoning
+- Open a candidate and see the score broken down by rubric criterion with
+  source-tagged evidence quotes, the resume, the voice introduction transcript,
+  matched and unevidenced skills, any conflicts between the two sources, and
+  the reasoning
 - Approve a candidate for interview, which generates an interview link
 - Copy that link and send it themselves
 - Review a completed interview: overall and sub-scores, strengths, concerns,
@@ -42,8 +46,8 @@ A single-use, high-stakes, distraction-free flow. Centered shell, no
 navigation.
 
 What a candidate does:
-- Opens an application link, enters name and email, records a voice
-  introduction
+- Opens an application link, enters name and email, uploads a resume PDF, and
+  records a voice introduction
 - Later, opens an interview link and completes a voice interview of 5 to 10
   adaptive questions
 - Sees a confirmation and nothing else
@@ -66,15 +70,16 @@ Rubric analyses the job description
 HR shares the application link
       │
       ▼
-Candidate records a voice introduction
+Candidate uploads a resume and records a voice introduction
       │
       ▼
-Introduction is transcribed
+Resume text is extracted, introduction is transcribed
       │
       ▼
 Candidate is screened against the rubric
-      │  per-criterion sub-scores, matched and missing skills, reasoning,
-      │  recommendation
+      │  both sources scored together. Per-criterion sub-scores with
+      │  source-tagged evidence, matched and unevidenced skills,
+      │  any resume/introduction conflicts, reasoning, recommendation
       ▼
 HR reviews the ranked list
       │
@@ -141,7 +146,7 @@ cannot be shared yet.
 
 | State | Set by | Meaning |
 |---|---|---|
-| `applied` | Application submitted | Audio saved, transcription in progress |
+| `applied` | Application submitted | Resume and audio saved, extraction and transcription in progress |
 | `screening` | Transcription complete | Being scored against the rubric |
 | `screened` | Screening complete | Score and recommendation available, awaiting HR |
 | `approved` | HR action | Interview token minted, link ready |

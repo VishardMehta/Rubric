@@ -1,15 +1,16 @@
 # Rubric
 
 Rubric reads a job description, builds a scoring rubric, and screens every
-applicant against it by voice.
+resume and voice introduction against it.
 
 HR posts a job. Rubric extracts the criteria and assigns point allocations
-summing to 100. Candidates apply with a two minute spoken introduction instead
-of a resume. Every applicant is transcribed and scored against the same rubric,
-criterion by criterion. HR reviews the ranked list and approves who moves
-forward. Approved candidates take a voice interview of 5 to 10 adaptive
-questions that follow what they actually said, then the interview is evaluated
-against the same rubric.
+summing to 100. Candidates apply with a resume and a two minute spoken
+introduction. The resume text is extracted, the introduction is transcribed,
+and both are scored against the same rubric criterion by criterion, with every
+piece of evidence tagged by which source it came from. HR reviews the ranked
+list and approves who moves forward. Approved candidates take a voice interview
+of 5 to 10 adaptive questions that follow what they actually said, then the
+interview is evaluated against the same rubric.
 
 Localhost demo. No deployment.
 
@@ -53,20 +54,52 @@ Copy `backend/.env.example` to `backend/.env` and fill in:
 | `GEMINI_API_KEY` | aistudio.google.com, free tier |
 | `GROQ_API_KEY` | console.groq.com, free tier |
 
-Run `database/schema.sql` in the Supabase SQL editor, then create two private
-storage buckets: `introductions` and `answers`.
+Run `database/schema.sql` in the Supabase SQL editor, then create three private
+storage buckets: `introductions`, `answers` and `resumes`.
 
 ## Running
 
 ```bash
-cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
+cd backend && .venv/bin/uvicorn app.main:app --reload --port 8123
 ```
 
 ```bash
 cd frontend && npm run dev
 ```
 
-Open http://localhost:5173
+Open http://localhost:5273
+
+Both ports are pinned. The Vite dev server uses `strictPort` on 5273 so it
+never drifts to 5174 and silently falls outside the backend's CORS list, and
+the frontend defaults to `127.0.0.1:8123` for the API. Override that with
+`VITE_API_BASE_URL` if you need a different one.
+
+## Layout
+
+```
+backend/app/
+  api/            HTTP routes, one module per resource
+  core/           settings, the one error shape, every tuned threshold
+  integrations/   Gemini, Groq, Supabase, pypdf. Anything outside the process
+  services/       Rubric's own logic: rubric, screening, interview, scoring
+  models.py       Pydantic models shared across all of the above
+
+frontend/src/
+  api/            the typed client. Every network call goes through here
+  hooks/          stateful React hooks
+  lib/            stateless helpers: formatting, thresholds, tone mapping
+  components/
+    primitives/   generic controls that know nothing about hiring
+    layout/       shells, page header, card, split
+    feedback/     empty, error, loading, toast, modal
+    data/         scores, chips, tables
+    domain/       the voice pipeline and other Rubric-specific pieces
+  routes/
+    candidate/    unauthenticated: apply and interview
+    hr/           the dashboard and everything under it
+    dev/          the primitives gallery, DEV builds only
+  styles/         tokens.css and base.css
+```
 
 ## Demo mode
 
@@ -74,7 +107,7 @@ Free tiers rate-limit, and a 429 during a live demo is unrecoverable in the
 moment.
 
 ```bash
-DEMO_MODE=1 .venv/bin/uvicorn app.main:app --port 8000
+DEMO_MODE=1 .venv/bin/uvicorn app.main:app --port 8123
 ```
 
 Replays recorded responses for the golden job and candidate instead of calling

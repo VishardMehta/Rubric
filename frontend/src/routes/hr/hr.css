@@ -1,0 +1,149 @@
+/*
+ * HR screens. docs/screens.md sections 1 to 5.
+ *
+ * Vertical rhythm is 32px between sections, against the candidate flow's
+ * 48px (design-system.md section 5). HR is working; the candidate is being
+ * assessed and gets the airier layout.
+ */
+
+/* --- Jobs Dashboard ------------------------------------------------------
+ * screens.md section 1. Two-line rows, not a column table: the status sits
+ * with the title and the counts read as a sentence underneath.
+ */
+
+/* No border-top: PageHeader already draws the rule that separates the
+   title from the list, and a second one here reads as a stray line. */
+.rb-joblist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rb-joblist__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-hairline);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+a.rb-joblist__row:hover {
+  background: var(--color-surface-hover);
+}
+
+/* An analyzing or failed job has nothing behind it yet, so it does not
+   pretend to be a link (screens.md section 1). */
+.rb-joblist__row--inert {
+  cursor: default;
+}
+
+.rb-joblist__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-joblist__title {
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  color: var(--color-ink);
+}
+
+.rb-joblist__bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  color: var(--color-ink-secondary);
+}
+
+.rb-joblist__posted {
+  white-space: nowrap;
+}
+
+/* --- Create Job ---------------------------------------------------------- */
+
+.rb-createjob__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: var(--layout-candidate-content-max);
+}
+
+.rb-createjob__submit {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rb-createjob__error {
+  margin-bottom: var(--space-6);
+  max-width: var(--layout-candidate-content-max);
+}
+
+.rb-createjob__generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-20) 0;
+  text-align: center;
+}
+
+.rb-createjob__generating-body {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--color-ink-secondary);
+}
+
+.rb-createjob__reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: var(--layout-candidate-content-max);
+}
+
+.rb-createjob__lede {
+  margin: 0;
+  color: var(--color-ink-secondary);
+}
+
+.rb-createjob__link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rb-createjob__link-title {
+  margin: 0;
+}
+
+.rb-createjob__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 767px) {
+  .rb-joblist__top,
+  .rb-joblist__bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .rb-createjob__actions .rb-button,
+  .rb-createjob__submit .rb-button {
+    width: 100%;
+  }
+
+  .rb-createjob__actions {
+    flex-direction: column-reverse;
+  }
+}

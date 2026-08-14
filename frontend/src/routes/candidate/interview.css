@@ -1,0 +1,313 @@
+/*
+ * The interview screen. docs/screens.md section 7.
+ *
+ * Its own full-viewport layout: no shell, no wordmark, no navigation, no
+ * footer. Nothing is clickable except the single control.
+ *
+ * Designed at 375px first. The wide layout is the same thing with more
+ * room, which is why there is only one narrow-width block at the bottom.
+ */
+
+.rb-interview {
+  min-height: 100vh;
+  min-height: 100dvh; /* keeps the control clear of mobile browser chrome */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-canvas);
+  padding: var(--space-10) var(--layout-gutter-compact);
+}
+
+.rb-interview__inner {
+  width: 100%;
+  max-width: var(--layout-candidate-content-max);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* --- Stage 1, ready ------------------------------------------------------ */
+
+.rb-interview__ready {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.rb-interview__job {
+  margin: 0;
+}
+
+.rb-interview__eyebrow {
+  margin: var(--space-2) 0 var(--space-8);
+}
+
+.rb-interview__intro {
+  margin: 0 0 var(--space-4);
+  max-width: 46ch;
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}
+
+.rb-interview__start {
+  margin-top: var(--space-10);
+}
+
+/* --- Stage 2, question --------------------------------------------------- */
+
+.rb-interview__turn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.rb-interview__progress-label {
+  margin: 0 0 var(--space-3);
+}
+
+/* A quiet track, not a stepper with circles. */
+.rb-interview__track {
+  width: 240px;
+  max-width: 100%;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hairline);
+  overflow: hidden;
+}
+
+.rb-interview__track-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  transition: width var(--duration-slow) var(--ease-entrance);
+}
+
+/* The question sits in a frame of fixed height, vertically centred.
+ *
+ * Generated follow-ups vary from 8 words to 30, and letting the block grow
+ * moved the orb and the control down the screen between every question.
+ * The candidate's eye then had to re-find the button each turn, and the
+ * orb appeared to drift. A fixed frame with the text centred in it means
+ * nothing below the question ever moves, no matter what the model writes.
+ *
+ * The type steps down instead. All three sizes are real roles from the
+ * scale in DESIGN.md - display, title-1, title-2 - so a long question is
+ * set smaller rather than the layout being stretched to fit it.
+ */
+.rb-interview__question-frame {
+  width: 100%;
+  height: 208px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--space-8);
+}
+
+.rb-interview__question {
+  margin: 0;
+  font-size: var(--text-display-size);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-line-height);
+  letter-spacing: var(--text-display-letter-spacing);
+  color: var(--color-ink);
+  /* Prose, so proportional figures rather than tabular. */
+  font-variant-numeric: normal;
+  max-width: 100%;
+  text-wrap: balance;
+  transition:
+    opacity var(--duration-slow) var(--ease-entrance),
+    color var(--duration-base) var(--ease-standard);
+}
+
+/* Beyond roughly four lines at display size. */
+.rb-interview__question--long {
+  font-size: var(--text-title-1-size);
+  line-height: var(--text-title-1-line-height);
+  letter-spacing: var(--text-title-1-letter-spacing);
+}
+
+/* The rare very long follow-up. */
+.rb-interview__question--longest {
+  font-size: var(--text-title-2-size);
+  line-height: var(--text-title-2-line-height);
+  letter-spacing: var(--text-title-2-letter-spacing);
+}
+
+/* Stage 4: 320ms, 8px rise. Instant under reduced motion via the global
+   reset in base.css, which drops every animation to 0.01ms. */
+.rb-interview__question--entering {
+  animation: rb-question-in var(--duration-slow) var(--ease-entrance);
+}
+
+@keyframes rb-question-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stage 3: the previous question stays on screen, dimmed, so the screen
+   never goes blank while the next one is being prepared. */
+.rb-interview__question--dimmed {
+  color: var(--color-ink-tertiary);
+}
+
+/* --- Orb -----------------------------------------------------------------
+ * Sits between the question and the meter. Below the question because the
+ * question is the hero of this screen and nothing may compete with it, and
+ * above the meter because the meter and the live dot are the literal
+ * answer to "am I being heard" while the orb is only the atmosphere.
+ */
+
+.rb-interview__orb {
+  margin-top: var(--space-2);
+  display: flex;
+  justify-content: center;
+  /* Fixed, not min-height. Together with the question frame above it, this
+     is what keeps the whole composition still between questions. */
+  height: 280px;
+}
+
+/* --- Control region ------------------------------------------------------
+ * Fixed height. The button, the processing label and the retry block all
+ * occupy the same space, so replacing one with another shifts nothing.
+ */
+
+/* screens.md stage 2 spaces this deliberately: the meter sits 48px under
+   the question, and the control a further 64px under the meter. The
+   control is that far away so a candidate mid-sentence does not have it
+   near the cursor, and so the meter reads as belonging to the question
+   rather than to the button. */
+.rb-interview__control {
+  margin-top: var(--space-8);
+  width: 100%;
+  max-width: 320px;
+  min-height: 176px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-16);
+}
+
+/* Meter, timer and caption move together as one unit. */
+.rb-interview__meter-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.rb-interview__meter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  justify-content: center;
+}
+
+.rb-interview__timer {
+  color: var(--color-ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-interview__hint {
+  margin: 0;
+  /* Reserved whether or not there is a hint, so the button never moves
+     when one appears. */
+  min-height: var(--space-5);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  color: var(--color-ink-secondary);
+}
+
+.rb-interview__hint--caution {
+  color: var(--color-caution);
+}
+
+.rb-interview__stage {
+  margin: 0;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  color: var(--color-ink-secondary);
+}
+
+.rb-interview__turn-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* --- Compact -------------------------------------------------------------
+ * screens.md section 7: at 375px the question drops to title-1, the
+ * control becomes full width, and the meter narrows. Everything else is
+ * unchanged.
+ */
+
+@media (max-width: 767px) {
+  .rb-interview {
+    padding: var(--space-8) var(--layout-gutter-compact);
+  }
+
+  .rb-interview__question-frame {
+    height: 168px;
+    margin-top: var(--space-5);
+  }
+
+  .rb-interview__question {
+    font-size: var(--text-title-1-size);
+    line-height: var(--text-title-1-line-height);
+    letter-spacing: var(--text-title-1-letter-spacing);
+  }
+
+  .rb-interview__question--long,
+  .rb-interview__question--longest {
+    font-size: var(--text-title-2-size);
+    line-height: var(--text-title-2-line-height);
+    letter-spacing: var(--text-title-2-letter-spacing);
+  }
+
+  .rb-interview__control {
+    margin-top: var(--space-6);
+    max-width: none;
+  }
+
+  /* The orb narrows at 375px so the question and the control still fit
+     above the fold on a phone. */
+  .rb-interview__orb {
+    margin-top: 0;
+    height: 200px;
+  }
+}
+
+/* --- Interview complete --------------------------------------------------
+ * screens.md section 8. Centered, quiet, and offering nothing to click.
+ */
+
+.rb-interview-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+}
+
+.rb-interview-done__title {
+  margin: 0 0 var(--space-2);
+}
+
+.rb-interview-done__body {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}

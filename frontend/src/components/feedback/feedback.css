@@ -1,0 +1,209 @@
+/*
+ * Empty, error, loading, toast and modal.
+ * docs/design-system.md sections 14 through 17.
+ *
+ * The shared shape of all three states is: what happened, why, what to do
+ * next. A state that only says what happened is not finished.
+ */
+
+/* --- Shared state block -------------------------------------------------- */
+
+.rb-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.rb-state--centered {
+  align-items: center;
+  text-align: center;
+  padding: var(--space-16) var(--space-6);
+}
+
+.rb-state__title {
+  margin: 0;
+  font-size: var(--text-title-3-size);
+  font-weight: var(--text-title-3-weight);
+  line-height: var(--text-title-3-line-height);
+  letter-spacing: var(--text-title-3-letter-spacing);
+  color: var(--color-ink);
+}
+
+.rb-state__body {
+  margin: 0;
+  max-width: 68ch;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}
+
+.rb-state__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+/* Recoverable errors sit inline where the failed thing would have been. */
+.rb-state--inline-error {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+}
+
+/* Empty states sit inside the region they are replacing, so they carry the
+   same border treatment a populated region would have. */
+.rb-state--empty {
+  padding: var(--space-16) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  align-items: center;
+  text-align: center;
+}
+
+/* --- LoadingState --------------------------------------------------------
+ * design-system.md section 15. The label names real backend work and only
+ * changes when the backend actually reaches that stage. No percentage bar:
+ * Rubric cannot know a percentage, so showing one is a lie.
+ */
+
+.rb-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-body-size);
+}
+
+.rb-loading--block {
+  justify-content: center;
+  padding: var(--space-16) var(--space-6);
+}
+
+/* --- Toast ---------------------------------------------------------------
+ * Confirmation of something that already happened, never a question. Sits
+ * bottom-left so it is clear of the primary action, which is top-right.
+ */
+
+.rb-toast-region {
+  position: fixed;
+  left: var(--space-6);
+  bottom: var(--space-6);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.rb-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 380px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-ink);
+  color: var(--color-on-dark);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-body-size);
+  pointer-events: auto;
+  animation: rb-toast-in var(--duration-base) var(--ease-entrance);
+}
+
+@keyframes rb-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 767px) {
+  .rb-toast-region {
+    left: var(--layout-gutter-compact);
+    right: var(--layout-gutter-compact);
+  }
+
+  .rb-toast {
+    max-width: none;
+  }
+}
+
+/* --- Modal ---------------------------------------------------------------
+ * design-system.md section 14. Two places only: reject confirmation and the
+ * microphone permission explainer. Entrance is opacity plus an 8px rise,
+ * no scale bounce.
+ */
+
+.rb-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--color-overlay-scrim);
+  animation: rb-fade-in var(--duration-base) var(--ease-entrance);
+}
+
+.rb-modal {
+  width: 100%;
+  max-width: 440px;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: rb-modal-in var(--duration-base) var(--ease-entrance);
+}
+
+.rb-modal__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-title-3-size);
+  font-weight: var(--text-title-3-weight);
+  line-height: var(--text-title-3-line-height);
+  letter-spacing: var(--text-title-3-letter-spacing);
+}
+
+.rb-modal__body {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  font-variant-numeric: normal;
+}
+
+.rb-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+@keyframes rb-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rb-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

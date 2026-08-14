@@ -635,14 +635,14 @@ Build these. Nothing else.
 
 **Primitives**
 `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `TagInput`,
-`Checkbox`, `Chip`, `Divider`, `Spinner`
+`Checkbox`, `Chip`, `Divider`, `Spinner`, `FileDropzone`
 
 **Layout**
 `HRShell`, `CandidateShell`, `PageHeader`, `Section`, `Card`, `Split`
 
 **Data**
 `DataTable`, `TableRow`, `StatRow`, `ScoreHero`, `ScoreBreakdown`,
-`ScoreInline`, `RecommendationChip`, `StatusChip`
+`ScoreInline`, `RecommendationChip`, `StatusChip`, `EvidenceList`
 
 **Feedback**
 `EmptyState`, `ErrorState`, `LoadingState`, `Toast`, `Modal`
