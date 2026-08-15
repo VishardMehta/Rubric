@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/layout";
 import { Button, Chip } from "../../components/primitives";
@@ -16,7 +16,7 @@ import "./hr.css";
  * at all.
  */
 
-export function JobsPage() {
+export function JobsPage({ view = "jobs" }: { view?: "overview" | "jobs" }) {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
@@ -45,9 +45,23 @@ export function JobsPage() {
     </Button>
   );
 
+  const overview = useMemo(() => {
+    if (!jobs) return null;
+    return {
+      active: jobs.filter((job) => job.state === "active").length,
+      applicants: jobs.reduce((total, job) => total + job.applicant_count, 0),
+      shortlisted: jobs.reduce((total, job) => total + job.shortlisted_count, 0),
+      interviews: jobs.reduce((total, job) => total + job.interviewed_count, 0),
+    };
+  }, [jobs]);
+
   return (
     <>
-      <PageHeader title="Jobs" actions={jobs && jobs.length > 0 ? postAction : undefined} />
+      <PageHeader
+        title={view === "overview" ? "Hiring overview" : "Jobs"}
+        subtitle={jobs && jobs.length > 0 ? "Your active hiring workspace" : undefined}
+        actions={jobs && jobs.length > 0 ? postAction : undefined}
+      />
 
       {failure && (
         <ApiErrorState
@@ -70,15 +84,59 @@ export function JobsPage() {
       )}
 
       {!failure && jobs && jobs.length > 0 && (
-        <ul className="rb-joblist">
-          {jobs.map((job) => (
-            <li key={job.id}>
-              <JobRow job={job} />
-            </li>
-          ))}
-        </ul>
+        <div className="rb-dashboard">
+          {overview && <DashboardOverview {...overview} />}
+          <section className="rb-dashboard__jobs" aria-labelledby="current-jobs-heading">
+            <div className="rb-dashboard__jobs-heading">
+              <div>
+                <p className="text-label rb-dashboard__eyebrow">Current roles</p>
+                <h2 id="current-jobs-heading" className="text-title-3 rb-dashboard__title">
+                  {view === "overview" ? "Roles needing attention" : "Hiring in progress"}
+                </h2>
+              </div>
+              <p className="text-caption rb-dashboard__note">Select a role to review candidates</p>
+            </div>
+            <ul className="rb-joblist">
+              {jobs.map((job) => (
+                <li key={job.id}>
+                  <JobRow job={job} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
       )}
     </>
+  );
+}
+
+function DashboardOverview({
+  active,
+  applicants,
+  shortlisted,
+  interviews,
+}: {
+  active: number;
+  applicants: number;
+  shortlisted: number;
+  interviews: number;
+}) {
+  const metrics = [
+    { value: active, label: "active roles" },
+    { value: applicants, label: "applicants" },
+    { value: shortlisted, label: "shortlisted" },
+    { value: interviews, label: "interviews complete" },
+  ];
+
+  return (
+    <section className="rb-dashboard__summary" aria-label="Hiring overview">
+      {metrics.map((metric) => (
+        <div key={metric.label} className="rb-dashboard__metric">
+          <span className="text-label">{metric.label}</span>
+          <strong>{metric.value}</strong>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -107,8 +165,15 @@ function JobRow({ job }: { job: JobSummary }) {
             ? "Building rubric from description"
             : failed
               ? "Rubric generation did not finish"
-              : `${job.applicant_count} applicant${job.applicant_count === 1 ? "" : "s"} · ${job.shortlisted_count} shortlisted · ${job.interviewed_count} interviewed`}
+              : "Review progress at a glance"}
         </span>
+        {!analyzing && !failed && (
+          <span className="rb-joblist__pipeline" aria-label="Hiring pipeline">
+            <span><strong>{job.applicant_count}</strong> applicant{job.applicant_count === 1 ? "" : "s"}</span>
+            <span><strong>{job.shortlisted_count}</strong> shortlisted</span>
+            <span><strong>{job.interviewed_count}</strong> interviewed</span>
+          </span>
+        )}
         <span className="rb-joblist__posted">Posted {formatDayMonth(job.created_at)}</span>
       </div>
     </>

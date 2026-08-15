@@ -177,6 +177,7 @@ An interview exists once a candidate is `approved`. Its own sub-state:
 | Path | Screen |
 |---|---|
 | `/` | Landing |
+| `/signin` | Sign in and register. The only HR route outside the session gate |
 | `/jobs` | Jobs Dashboard |
 | `/jobs/new` | Create Job |
 | `/jobs/:jobId` | Job Detail and candidate ranking |
@@ -195,8 +196,17 @@ An interview exists once a candidate is `approved`. Its own sub-state:
 Candidate routes are unauthenticated and identified only by job id or token.
 Interview tokens are opaque, single-candidate, and not guessable.
 
-There is no HR authentication in the MVP. This is a localhost demo. Note it in
-the README so it is a stated decision rather than an oversight.
+Every HR route except `/signin` requires a session. Enforcement is a
+per-route FastAPI dependency rather than middleware, because the entire
+candidate side is public by design: a middleware allowlist that drifts
+either locks a candidate out of their interview or exposes HR's data, and
+neither failure is visible from the route it affects.
+
+Ownership is checked on top of the session. A job belongs to an account, and
+a candidate belongs to a job, so every candidate-scoped route resolves
+candidate to job to owner before returning anything. Someone else's row
+answers 404, not 403: a 403 confirms the id exists and turns the route into
+an oracle for enumerating other accounts' data.
 
 ---
 
@@ -257,7 +267,26 @@ Not:
 
 ### In the MVP
 
-Everything in §3. Nine screens, listed in `docs/screens.md`.
+Everything in §3. Nine screens, listed in `docs/screens.md`, plus sign in.
+
+**HR accounts and job ownership** were added after the original MVP shipped,
+at the client's request. They were previously listed below as out of scope,
+and the change is recorded in `PROJECT.md` under commercial terms because it
+moved the scope. What it means:
+
+- HR registers with an email and a password and signs in. Sessions are
+  opaque tokens in `hr_sessions`, not JWTs, so they can be revoked.
+- A job belongs to the account that created it. HR sees only their own roles
+  and only the applicants to those roles.
+- The first account registered claims every job that has no owner, which is
+  what keeps the rows created before accounts existed reachable.
+- The candidate side stays completely unauthenticated. Candidates browse
+  every active role from every account, and interview links stay opaque
+  tokens.
+
+Registration is open, with no invitation and no approval, and there is no
+password reset. Both follow from email delivery still being out of scope: a
+reset link has nowhere to go.
 
 ### Out of the MVP
 
@@ -270,7 +299,8 @@ Documented as future modules, not built:
 | GitHub and LinkedIn verification | Separate optional module. LinkedIn has no free API and blocks scraping, so any real version is GitHub-only and should be described that way |
 | PDF report generation | |
 | Email delivery | HR copies the link and sends it themselves |
-| HR authentication and multi-user | |
+| Password reset and HR invitations | Both need email delivery, which is out of scope above |
+| Candidate accounts | Candidates identify themselves by the email they applied with. No password |
 | Candidate re-application and retakes | |
 | Rubric editing by HR | Rubric is generated and read-only. Regenerate is the only affordance |
 

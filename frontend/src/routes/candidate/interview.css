@@ -25,6 +25,18 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  animation: rb-interview-in var(--duration-slow) var(--ease-entrance);
+}
+
+@keyframes rb-interview-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* --- Stage 1, ready ------------------------------------------------------ */
@@ -54,6 +66,14 @@
   margin-top: var(--space-10);
 }
 
+.rb-interview__ready-orb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 144px;
+  margin: var(--space-2) 0 calc(var(--space-2) * -1);
+}
+
 /* --- Stage 2, question --------------------------------------------------- */
 
 .rb-interview__turn {
@@ -65,6 +85,7 @@
 
 .rb-interview__progress-label {
   margin: 0 0 var(--space-3);
+  color: var(--color-ink-secondary);
 }
 
 /* A quiet track, not a stepper with circles. */
@@ -166,13 +187,40 @@
  * answer to "am I being heard" while the orb is only the atmosphere.
  */
 
-.rb-interview__orb {
+.rb-interview__presence {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  width: 100%;
+  height: 280px;
   margin-top: var(--space-2);
+}
+
+.rb-interview__orb {
   display: flex;
   justify-content: center;
+  align-items: center;
   /* Fixed, not min-height. Together with the question frame above it, this
      is what keeps the whole composition still between questions. */
   height: 280px;
+}
+
+/* The canvas itself already follows real audio and speech events. This
+   short state transition only keeps its visual footprint from snapping
+   when the interviewer moves from listening to processing. */
+.rb-interview__orb .rb-orb {
+  transition: opacity var(--duration-base) var(--ease-standard);
+}
+
+.rb-interview__orb--processing .rb-orb {
+  opacity: 0.72;
+}
+
+.rb-interview__orb--speaking .rb-orb,
+.rb-interview__orb--listening .rb-orb {
+  opacity: 1;
 }
 
 /* --- Control region ------------------------------------------------------
@@ -235,6 +283,7 @@
 
 .rb-interview__stage {
   margin: 0;
+  max-width: 30ch;
   font-size: var(--text-body-size);
   line-height: var(--text-body-line-height);
   color: var(--color-ink-secondary);
@@ -283,9 +332,20 @@
 
   /* The orb narrows at 375px so the question and the control still fit
      above the fold on a phone. */
-  .rb-interview__orb {
+  .rb-interview__presence {
+    grid-template-columns: 1fr;
+    gap: 0;
+    height: 340px;
     margin-top: 0;
-    height: 200px;
+  }
+
+  .rb-interview__orb {
+    height: 160px;
+  }
+
+  .rb-camera {
+    width: 180px;
+    height: 136px;
   }
 }
 

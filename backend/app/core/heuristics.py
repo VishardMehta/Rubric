@@ -111,3 +111,56 @@ LLM_TRANSIENT_BACKOFF_SECONDS = 1.5
 
 CONSISTENCY_HARNESS_RUNS = 5
 CONSISTENCY_HARNESS_MAX_SCORE_RANGE = 8  # points, max - min across the runs
+
+# --- HR accounts -----------------------------------------------------------
+# database/002_accounts.sql. Password hashing uses hashlib.scrypt from the
+# standard library, because CLAUDE.md forbids adding a dependency and
+# bcrypt/argon2 would be one.
+
+# scrypt cost parameters. n must be a power of two. These are the values
+# RFC 7914 gives as interactive-login defaults, and they cost roughly 100ms
+# and 16MB per hash on a laptop: slow enough to make offline cracking
+# expensive, fast enough that a demo login does not feel stuck.
+#
+# n is stored per user in the hash record rather than assumed, so raising
+# it later does not invalidate existing passwords.
+PASSWORD_SCRYPT_N = 2**14
+PASSWORD_SCRYPT_R = 8
+PASSWORD_SCRYPT_P = 1
+PASSWORD_SCRYPT_DKLEN = 32
+PASSWORD_SALT_BYTES = 16
+
+# scrypt allocates about 128 * n * r * p bytes. Python's default cap is
+# lower than that, so the limit is raised explicitly at the call site
+# rather than silently failing on a memory error.
+PASSWORD_SCRYPT_MAXMEM = 128 * PASSWORD_SCRYPT_N * PASSWORD_SCRYPT_R * PASSWORD_SCRYPT_P * 2
+
+# Short enough that a forgotten open tab is not a standing risk, long
+# enough that HR is not signed out mid-review.
+SESSION_TTL_HOURS = 12
+
+# Below this a password is rejected at registration. Deliberately a length
+# floor and nothing else: composition rules push people toward "Passw0rd!"
+# and are worse than length.
+PASSWORD_MIN_LENGTH = 10
+
+# --- Job description parsing -----------------------------------------------
+# Feeds the Create Job form from an uploaded PDF.
+
+# Below this the extracted body is not enough to build a rubric from, which
+# is the same floor the Create Job form applies to a typed description.
+JOB_FACTS_MIN_DESCRIPTION_CHARS = 120
+
+# The skills field feeds a TagInput. More than this is not a better answer,
+# it means the model listed every noun in the document.
+JOB_FACTS_MAX_SKILLS = 12
+
+# --- Resume profile --------------------------------------------------------
+# Structured resume facts for Candidate Detail. Never feeds a score.
+
+# Orientation, not a skills matrix. Past this the list stops being scannable
+# and starts being the resume again.
+RESUME_PROFILE_MAX_SKILLS = 20
+
+# Per role. Three concrete things is a summary; ten is the original bullets.
+RESUME_PROFILE_MAX_HIGHLIGHTS = 3

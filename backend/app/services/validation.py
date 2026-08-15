@@ -21,9 +21,13 @@ from app.core.heuristics import (
     EVAL_MAX_STRENGTHS,
     EVAL_MIN_CONCERNS,
     EVAL_MIN_STRENGTHS,
+    JOB_FACTS_MAX_SKILLS,
+    JOB_FACTS_MIN_DESCRIPTION_CHARS,
     PLAN_FIXED_OPENING_SLOTS,
     PLAN_MIN_SLOT_FOR_DEEP_DEPTH,
     QUESTION_SIMILARITY_THRESHOLD,
+    RESUME_PROFILE_MAX_HIGHLIGHTS,
+    RESUME_PROFILE_MAX_SKILLS,
     RUBRIC_MAX_CRITERIA,
     RUBRIC_MIN_CRITERIA,
     RUBRIC_TOTAL_POINTS,
@@ -33,7 +37,9 @@ from app.models import (
     AnswerAnalysis,
     Evaluation,
     InterviewPlan,
+    JobFacts,
     PlannedQuestion,
+    ResumeProfile,
     Rubric,
     Screening,
     TurnResult,
@@ -41,6 +47,8 @@ from app.models import (
 from app.services.similarity import most_similar_prior
 
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+# A resume link has to be dereferenceable to be worth rendering as one.
+_LINK_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
 _WHITESPACE_RE = re.compile(r"\s+")
 # Matches a literal ellipsis character or three or more dots, with any
 # surrounding whitespace, as used to elide the middle of a quote.
@@ -407,4 +415,93 @@ def validate_evaluation(evaluation: Evaluation) -> None:
             raise ValidationViolation(
                 "One of the strengths or concerns is empty. Every entry must be a "
                 "complete sentence naming something specific."
+            )
+
+
+# ---------------------------------------------------------------------
+# Stage 0: job description parsing. Feeds the Create Job form.
+# ---------------------------------------------------------------------
+
+
+def validate_job_facts(facts: JobFacts) -> None:
+    """Check what the form needs, and nothing more.
+
+    Deliberately lenient compared with the scoring validators. A missing
+    field here is a legitimate answer, because the whole design of this
+    stage is that the model returns null rather than guessing. The only
+    hard requirement is a usable description body, since that is the one
+    field HR cannot reconstruct from the form itself.
+
+    The skills ceiling exists because the field feeds a TagInput. Twenty
+    chips is not a better answer than eight; it means the model listed
+    every noun in the document.
+    """
+    if len(facts.description.strip()) < JOB_FACTS_MIN_DESCRIPTION_CHARS:
+        raise ValidationViolation(
+            f"The description you returned is {len(facts.description.strip())} "
+            f"characters, which is too short to build a rubric from. Return the "
+            f"role's responsibilities and requirements in at least "
+            f"{JOB_FACTS_MIN_DESCRIPTION_CHARS} characters, using the document's "
+            f"own wording."
+        )
+    if len(facts.skills) > JOB_FACTS_MAX_SKILLS:
+        raise ValidationViolation(
+            f"You listed {len(facts.skills)} skills. Return at most "
+            f"{JOB_FACTS_MAX_SKILLS}, keeping the concrete tools and "
+            f"technologies and dropping general qualities."
+        )
+    for skill in facts.skills:
+        if not skill.strip():
+            raise ValidationViolation("One of the skills is empty. Remove it.")
+
+
+# ---------------------------------------------------------------------
+# Resume profile. Feeds Candidate Detail, never a score.
+# ---------------------------------------------------------------------
+
+
+def validate_resume_profile(profile: ResumeProfile) -> None:
+    """Check only what would render badly.
+
+    Deliberately permissive. Every field is allowed to be absent, because
+    the whole design of this stage is that a sparse resume produces a
+    sparse profile rather than an invented one. There is nothing to check
+    the numbers against here, unlike the scoring stages, because there are
+    no numbers.
+    """
+    if len(profile.skills) > RESUME_PROFILE_MAX_SKILLS:
+        raise ValidationViolation(
+            f"You listed {len(profile.skills)} skills. Return at most "
+            f"{RESUME_PROFILE_MAX_SKILLS}, keeping the ones the resume names "
+            f"most prominently."
+        )
+    for entry in profile.experience:
+        if len(entry.highlights) > RESUME_PROFILE_MAX_HIGHLIGHTS:
+            raise ValidationViolation(
+                f"The entry for {entry.organisation} has {len(entry.highlights)} "
+                f"highlights. Return at most {RESUME_PROFILE_MAX_HIGHLIGHTS} per "
+                f"role, choosing the most concrete."
+            )
+        if not entry.organisation.strip():
+            raise ValidationViolation(
+                "An experience entry has no organisation. Every entry needs the "
+                "employer as the resume names it."
+            )
+    for entry in profile.education:
+        if not entry.institution.strip():
+            raise ValidationViolation(
+                "An education entry has no institution. Every entry needs the "
+                "school or university as the resume names it."
+            )
+    # Observed on a real resume: a PDF hyperlink whose anchor text is
+    # "Kaggle" extracts as the bare word, and the model returned that word
+    # as a link. Rendering it as an anchor would produce a link to nowhere,
+    # so the model is told to correct it rather than the value being
+    # silently dropped here.
+    for link in profile.links:
+        if not _LINK_RE.match(link.strip()):
+            raise ValidationViolation(
+                f"{link!r} is not a URL. The links field takes full addresses "
+                f"only, and the resume text often keeps just the label of a "
+                f"hyperlink. Return an empty list when no real URLs appear."
             )

@@ -3,6 +3,13 @@ import "./data.css";
 export interface Stat {
   value: string | number;
   label: string;
+  /**
+   * Puts the label first: `Posted 14 Aug` rather than `14 Aug posted`.
+   *
+   * Counts read naturally as number-then-noun, but a date does not, and
+   * screens.md section 3 writes it the other way round in the same row.
+   */
+  labelFirst?: boolean;
 }
 
 /**
@@ -17,7 +24,10 @@ export function StatRow({ stats }: { stats: Stat[] }) {
   return (
     <dl className="rb-stat-row">
       {stats.map((stat) => (
-        <div key={stat.label} className="rb-stat-row__item">
+        <div
+          key={stat.label}
+          className={`rb-stat-row__item${stat.labelFirst ? " rb-stat-row__item--label-first" : ""}`}
+        >
           <dd className="rb-stat-row__value">{stat.value}</dd>
           <dt className="rb-stat-row__label">{stat.label}</dt>
         </div>

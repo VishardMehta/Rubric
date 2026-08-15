@@ -17,13 +17,17 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
 }
 
 .rb-joblist__row {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-hairline);
   text-decoration: none;
   color: inherit;
@@ -54,18 +58,85 @@ a.rb-joblist__row:hover {
 }
 
 .rb-joblist__bottom {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto auto;
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-6);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line-height);
   color: var(--color-ink-secondary);
 }
 
+.rb-joblist__pipeline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  color: var(--color-ink-secondary);
+  white-space: nowrap;
+}
+
+.rb-joblist__pipeline strong {
+  color: var(--color-ink);
+  font-weight: var(--text-body-strong-weight);
+}
+
 .rb-joblist__posted {
   white-space: nowrap;
 }
+
+.rb-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.rb-dashboard__summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rb-dashboard__metric {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+}
+
+.rb-dashboard__metric + .rb-dashboard__metric {
+  border-left: 1px solid var(--color-hairline);
+}
+
+.rb-dashboard__metric strong {
+  color: var(--color-ink);
+  font-size: var(--text-score-large-size);
+  font-weight: var(--text-score-large-weight);
+  line-height: var(--text-score-large-line-height);
+  letter-spacing: var(--text-score-large-letter-spacing);
+}
+
+.rb-dashboard__jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.rb-dashboard__jobs-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-dashboard__eyebrow,
+.rb-dashboard__title,
+.rb-dashboard__note {
+  margin: 0;
+}
+
+.rb-dashboard__title { margin-top: var(--space-1); }
 
 /* --- Create Job ---------------------------------------------------------- */
 
@@ -75,6 +146,77 @@ a.rb-joblist__row:hover {
   gap: var(--space-6);
   max-width: var(--layout-candidate-content-max);
 }
+
+.rb-createjob__context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.rb-createjob__context legend {
+  padding: 0 var(--space-2);
+  color: var(--color-ink);
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+}
+
+.rb-createjob__context > p,
+.rb-createjob__document p { margin: 0; color: var(--color-ink-secondary); font-size: var(--text-caption-size); }
+
+.rb-createjob__field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+
+.rb-createjob__document {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-tint);
+}
+
+.rb-createjob__document .text-label,
+.rb-createjob__document h2 { margin: 0; }
+.rb-createjob__document h2 { margin-top: var(--space-1); }
+.rb-createjob__document > div:first-child > p:last-child { margin-top: var(--space-2); }
+
+.rb-createjob__document-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rb-createjob__file-control {
+  position: relative;
+  display: inline-flex;
+  max-width: 300px;
+  height: 36px;
+  align-items: center;
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  font-size: var(--text-caption-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-createjob__file-control:hover { color: var(--color-ink); }
+.rb-createjob__file-control input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.rb-createjob__document-error { color: var(--color-negative) !important; }
 
 .rb-createjob__submit {
   display: flex;
@@ -138,6 +280,31 @@ a.rb-joblist__row:hover {
     gap: var(--space-1);
   }
 
+  .rb-joblist__bottom {
+    display: flex;
+  }
+
+  .rb-joblist__pipeline {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    white-space: normal;
+  }
+
+  .rb-dashboard { gap: var(--space-8); }
+
+  .rb-dashboard__summary { grid-template-columns: 1fr 1fr; }
+
+  .rb-dashboard__metric { padding: var(--space-4); }
+
+  .rb-dashboard__metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--color-hairline); }
+  .rb-dashboard__metric:nth-child(4) { border-top: 1px solid var(--color-hairline); }
+
+  .rb-dashboard__jobs-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
   .rb-createjob__actions .rb-button,
   .rb-createjob__submit .rb-button {
     width: 100%;
@@ -146,4 +313,935 @@ a.rb-joblist__row:hover {
   .rb-createjob__actions {
     flex-direction: column-reverse;
   }
+
+  .rb-createjob__field-grid { grid-template-columns: 1fr; }
+  .rb-createjob__context,
+  .rb-createjob__document { padding: var(--space-5); }
+}
+
+/* --- Cross-role directories ------------------------------------------- */
+
+.rb-directory {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.rb-directory__toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rb-directory__toolbar .rb-field { width: min(100%, 440px); }
+.rb-directory__toolbar > p { margin: 0 0 var(--space-2); white-space: nowrap; }
+
+.rb-directory__list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.rb-directory__row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(180px, 1.4fr) 52px minmax(150px, auto) auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-3);
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-hairline);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-directory__row:hover { background: var(--color-surface-hover); }
+
+.rb-directory__person {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rb-directory__person strong { font-weight: var(--text-body-strong-weight); }
+.rb-directory__person small { overflow: hidden; color: var(--color-ink-secondary); font-size: var(--text-caption-size); text-overflow: ellipsis; white-space: nowrap; }
+.rb-directory__role { color: var(--color-ink-secondary); }
+.rb-directory__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.rb-directory__action { color: var(--color-accent); font-size: var(--text-body-strong-size); font-weight: var(--text-body-strong-weight); white-space: nowrap; }
+
+.rb-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.6fr);
+  gap: var(--space-12);
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rb-settings p,
+.rb-settings h2 { margin: 0; }
+.rb-settings h2 { margin-top: var(--space-2); }
+.rb-settings > div > .text-body { max-width: 56ch; margin-top: var(--space-4); color: var(--color-ink-secondary); }
+.rb-settings__notice { padding-left: var(--space-6); border-left: 1px solid var(--color-hairline); }
+.rb-settings__notice p { margin-top: var(--space-3); color: var(--color-ink-secondary); }
+
+@media (max-width: 767px) {
+  .rb-directory__toolbar { align-items: stretch; flex-direction: column; gap: var(--space-2); }
+  .rb-directory__toolbar .rb-field { width: 100%; }
+  .rb-directory__row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
+  .rb-directory__role, .rb-directory__score { grid-column: 1; }
+  .rb-directory__chips { grid-column: 1; }
+  .rb-directory__action { grid-column: 2; grid-row: 1; }
+  .rb-settings { grid-template-columns: 1fr; gap: var(--space-6); }
+  .rb-settings__notice { padding: var(--space-6) 0 0; border-top: 1px solid var(--color-hairline); border-left: 0; }
+}
+
+/* --- Job Detail ----------------------------------------------------------
+ * screens.md section 3.
+ */
+
+.rb-jobdetail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.rb-jobdetail__candidates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-top: var(--space-2);
+}
+
+.rb-jobdetail__candidates-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-jobdetail__candidates-eyebrow,
+.rb-jobdetail__candidates-title,
+.rb-jobdetail__candidates-note {
+  margin: 0;
+}
+
+.rb-jobdetail__candidates-title {
+  margin-top: var(--space-1);
+}
+
+.rb-jobdetail__candidates-note {
+  flex-shrink: 0;
+}
+
+/* Filter tabs. Counts are live and come from the loaded rows, not from a
+   separate call that could disagree with the table underneath. */
+.rb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-hairline);
+  padding-bottom: var(--space-3);
+}
+
+.rb-tab {
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-body-size);
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.rb-tab:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Background plus weight plus colour, so the active tab survives
+   grayscale (design-system.md section 13). */
+.rb-tab--active {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+  font-weight: var(--text-body-strong-weight);
+}
+
+/* A count is information, not decoration, so it does not get dimmed to
+   ink-tertiary. Hierarchy here comes from the active state, not from
+   making the number harder to read (design-system.md section 19). */
+.rb-tab__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-tab--active .rb-tab__count {
+  color: var(--color-accent);
+}
+
+.rb-table__skills {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-secondary);
+}
+
+.rb-card-row__status {
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+  align-self: center;
+}
+
+/* --- Candidate Detail ----------------------------------------------------
+ * screens.md section 4. Split 5:7, scores left, evidence right.
+ */
+
+.rb-candidate__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.rb-candidate__action-error {
+  margin-bottom: var(--space-6);
+  color: var(--color-negative);
+  font-size: var(--text-body-size);
+}
+
+.rb-candidate__link {
+  margin-bottom: var(--space-8);
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+}
+
+.rb-candidate__link-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rb-candidate__link-eyebrow {
+  margin: 0;
+}
+
+.rb-candidate__link-title,
+.rb-candidate__card-title {
+  margin: 0 0 var(--space-4);
+}
+
+.rb-candidate__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.rb-candidate__breakdown {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.rb-candidate__hint {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+}
+
+.rb-candidate__transcript {
+  margin-top: var(--space-4);
+}
+
+.rb-candidate__skills + .rb-candidate__skills {
+  margin-top: var(--space-5);
+}
+
+.rb-candidate__skills-title {
+  margin: 0 0 var(--space-2);
+}
+
+.rb-candidate__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rb-candidate__assessment {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--color-ink);
+  font-variant-numeric: normal;
+}
+
+.rb-candidate__resume-link {
+  color: var(--color-accent);
+}
+
+/* Conflicts: surface-sunken, ink text, no semantic colour, no icon. The
+   system reports a discrepancy. It does not accuse anyone, and the
+   discrepancy carries no score penalty (screens.md section 4). */
+.rb-conflicts {
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.rb-conflicts__list {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--color-ink);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  max-width: 68ch;
+  font-variant-numeric: normal;
+}
+
+.rb-candidate__interview-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+}
+
+.rb-candidate__interview-link-detail {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+  font-weight: var(--text-body-weight);
+}
+
+.rb-candidate__interview-link:hover {
+  background: var(--color-surface-hover);
+}
+
+.rb-candidate__interview-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-body-size);
+}
+
+.rb-candidate__interview-note-label {
+  color: var(--color-ink);
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+}
+
+/* --- Interview Result ----------------------------------------------------
+ * screens.md section 5.
+ */
+
+.rb-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.rb-result__score-region {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 5fr);
+  align-items: end;
+  gap: var(--space-10);
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rb-result__score-context {
+  margin: 0 0 var(--space-4);
+}
+
+.rb-result__score-note {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-body-lg-size);
+  line-height: var(--text-body-lg-line-height);
+  font-variant-numeric: normal;
+}
+
+.rb-result__pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-16) 0;
+  text-align: center;
+}
+
+.rb-result__pending-body {
+  margin: 0;
+  color: var(--color-ink-secondary);
+}
+
+/* Evenly spaced, not in cards (section 5). */
+.rb-subscores {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+  padding: var(--space-2) 0;
+}
+
+.rb-subscore__label {
+  margin: 0 0 var(--space-2);
+}
+
+/* Neutral ink. See the comment at the call site: the backend sends one
+   band, and inventing three more here is the one thing the frontend must
+   never do. */
+.rb-subscore__value {
+  margin: 0;
+  font-size: var(--text-score-large-size);
+  font-weight: var(--text-score-large-weight);
+  line-height: var(--text-score-large-line-height);
+  letter-spacing: var(--text-score-large-letter-spacing);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.rb-subscore__unit {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+}
+
+.rb-result__lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+/* Plain bulleted lists. Concerns are not red (section 5). */
+.rb-result__list {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 68ch;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  color: var(--color-ink);
+  font-variant-numeric: normal;
+}
+
+.rb-result__empty {
+  margin: 0;
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+}
+
+.rb-transcript-section__title {
+  margin: 0 0 var(--space-5);
+}
+
+.rb-turns {
+  display: flex;
+  flex-direction: column;
+}
+
+.rb-turn {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: var(--space-4);
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.rb-turn__slot {
+  color: var(--color-ink-tertiary);
+}
+
+.rb-turn__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.rb-turn__question {
+  margin: 0;
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  line-height: var(--text-body-line-height);
+  color: var(--color-ink);
+  max-width: 68ch;
+}
+
+.rb-turn__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-turn__criteria {
+  color: var(--color-ink-secondary);
+}
+
+/* Context, not a score. No colour, right-aligned (section 5). */
+.rb-turn__time {
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-turn__answer {
+  margin: 0;
+  max-width: 68ch;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
+  color: var(--color-ink);
+  font-variant-numeric: normal;
+}
+
+.rb-turn__unanswered {
+  margin: 0;
+  font-size: var(--text-body-size);
+  color: var(--color-ink-secondary);
+}
+
+@media (max-width: 1179px) {
+  .rb-result__lists {
+    grid-template-columns: 1fr;
+  }
+
+  .rb-result__score-region {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 767px) {
+  .rb-candidate__actions {
+    width: 100%;
+  }
+
+  .rb-jobdetail__candidates-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .rb-candidate__actions .rb-button {
+    flex: 1;
+  }
+
+  .rb-subscores {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+
+  .rb-turn {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .rb-turn__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+}
+
+/* --- Sign in --------------------------------------------------------------
+ * The only HR screen outside HRShell, so it owns its own centering rather
+ * than inheriting the shell's content column.
+ */
+
+.rb-signin {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--layout-gutter-compact);
+  background: var(--color-canvas);
+}
+
+.rb-signin__panel {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rb-signin__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.rb-signin__mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.rb-signin__title {
+  margin: 0;
+}
+
+.rb-signin__lede {
+  margin: 0;
+  color: var(--color-ink-secondary);
+}
+
+.rb-signin__failure {
+  margin-top: var(--space-2);
+}
+
+.rb-signin__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+
+/* Full width: this is the only action on the screen. */
+.rb-signin__form .rb-button {
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+.rb-signin__switch {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  text-align: center;
+}
+
+.rb-signin__switch button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rb-signin__switch button:hover {
+  color: var(--color-accent-hover, var(--color-accent));
+}
+
+/* --- Create Job side panel ------------------------------------------------
+ * Fills the right column that used to be empty at every stage. It shows
+ * the role as the model will receive it, which is the one thing HR cannot
+ * otherwise see and the thing that decides how good the rubric is.
+ */
+
+.rb-rolepanel {
+  position: sticky;
+  top: var(--space-10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+
+.rb-rolepanel__eyebrow {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  text-transform: uppercase;
+}
+
+.rb-rolepanel__title {
+  margin: 0;
+}
+
+.rb-rolepanel__imported {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-tint);
+  color: var(--color-ink-secondary);
+}
+
+.rb-rolepanel__imported-file {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--text-caption-size);
+  font-weight: var(--text-body-strong-weight);
+  word-break: break-all;
+}
+
+.rb-rolepanel__imported p:last-child {
+  margin: 0;
+}
+
+.rb-rolepanel__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+}
+
+.rb-rolepanel__facts > div {
+  display: contents;
+}
+
+.rb-rolepanel__facts dt {
+  color: var(--color-ink-secondary);
+}
+
+.rb-rolepanel__facts dd {
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.rb-rolepanel__skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The description as the model receives it. Capped so a long paste does
+   not push the character count off the bottom of a tall screen. */
+.rb-rolepanel__body {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-hairline);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-body-line-height);
+  white-space: pre-wrap;
+}
+
+.rb-rolepanel__body p {
+  margin: 0;
+}
+
+.rb-rolepanel__placeholder {
+  color: var(--color-ink-tertiary, var(--color-ink-secondary));
+}
+
+.rb-rolepanel__count,
+.rb-rolepanel__note {
+  margin: 0;
+  color: var(--color-ink-secondary);
+}
+
+.rb-rolepanel__count--short {
+  color: var(--color-caution-ink, var(--color-ink-secondary));
+}
+
+/* Stacked under the Split breakpoint, where sticky would trap it. */
+@media (max-width: 1179px) {
+  .rb-rolepanel {
+    position: static;
+  }
+}
+
+/* --- Resume profile -------------------------------------------------------
+ * Who the candidate is, above the numbers about them. Display only: no
+ * points, no bars, no band colour, because nothing here feeds a score.
+ */
+
+.rb-profile__headline {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--text-body-lg-size, var(--text-body-size));
+  line-height: var(--text-body-line-height);
+}
+
+.rb-profile__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-caption-size);
+}
+
+.rb-profile__links a {
+  color: var(--color-accent);
+  word-break: break-all;
+}
+
+.rb-profile__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rb-profile__entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rb-profile__entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-profile__entry-title {
+  color: var(--color-ink);
+  font-weight: var(--text-body-strong-weight);
+}
+
+/* Dates are context, not a measurement, so they sit quiet and right
+   aligned in the same register as the response times on Interview Result. */
+.rb-profile__period {
+  flex: 0 0 auto;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rb-profile__entry-detail {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+}
+
+.rb-profile__highlights {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-body-line-height);
+}
+
+.rb-profile__highlights li + li {
+  margin-top: var(--space-1);
+}
+
+@media (max-width: 767px) {
+  .rb-profile__entry-head {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+}
+
+/* --- Candidate pipeline ---------------------------------------------------
+ * Grouped by where each candidate actually is, interviewed first. This
+ * replaced a flat score-sorted list with recommendation filter tabs, which
+ * put a scored interview in the same undifferentiated run as an
+ * application from an hour ago.
+ */
+
+.rb-pipeline__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rb-pipeline__group + .rb-pipeline__group {
+  margin-top: var(--space-10);
+}
+
+.rb-pipeline__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.rb-pipeline__title,
+.rb-pipeline__hint {
+  margin: 0;
+}
+
+.rb-pipeline__hint {
+  color: var(--color-ink-secondary);
+}
+
+/* A count, not a score. Neutral ink and no tint, so it cannot be read as
+   one (design-system.md section 12). */
+.rb-pipeline__count {
+  margin-left: var(--space-1);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-body-size);
+  font-weight: var(--text-body-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-pipeline__group--collapsed {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.rb-pipeline__group--collapsed > summary {
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  font-size: var(--text-title-3-size);
+  font-weight: var(--text-title-3-weight);
+  list-style: none;
+}
+
+.rb-pipeline__group--collapsed > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rb-pipeline__group--collapsed > summary::before {
+  display: inline-block;
+  width: 1em;
+  content: "▸";
+}
+
+.rb-pipeline__group--collapsed[open] > summary::before {
+  content: "▾";
+}
+
+.rb-pipeline__group--collapsed > summary:hover {
+  color: var(--color-ink);
+}
+
+.rb-pipeline__body {
+  margin-top: var(--space-4);
+}
+
+/* The auth bypass, stated on the screen it affects. Caution rather than
+   danger: it is a deliberate setting, not a fault, but it must not be
+   possible to demo for an hour without noticing it is on. */
+.rb-signin__demo {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
 }

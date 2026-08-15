@@ -1,0 +1,460 @@
+{
+  "AnswerAnalysis:438e3dfd421ee18a": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "answer_scores": [
+        {
+          "criterion_id": "python_and_django_expertise",
+          "evidence": "",
+          "points_awarded": 0,
+          "points_possible": 30
+        },
+        {
+          "criterion_id": "postgresql_and_data_modelling",
+          "evidence": "",
+          "points_awarded": 0,
+          "points_possible": 25
+        }
+      ],
+      "claims_made": [
+        "The candidate delayed writing an incident postmortem by two days.",
+        "The candidate now takes rough notes during active incidents."
+      ],
+      "topics_identified": [
+        "incident response",
+        "postmortem documentation"
+      ]
+    },
+    "stage": "AnswerAnalysis"
+  },
+  "Evaluation:2cc5073ba5dd21e0": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "concerns": [
+        "The candidate could not provide specific details on the Django ORM patterns or database locking issues that caused the backfill process to slow down during the junior engineer's implementation.",
+        "She lacked direct experience with primary database failover procedures, relying entirely on managed service providers for high availability.",
+        "The interview did not evidence deep technical knowledge regarding Django serialization bottlenecks, as the candidate pivoted to discussing cache stampede mitigation instead of the serialization layer itself."
+      ],
+      "recommendation": "review",
+      "strengths": [
+        "Priya demonstrated a clear understanding of performance optimization by migrating a recommendation service from request-time scoring to a pre-computed table, reducing p95 latency from 400ms to 48ms.",
+        "She showed practical experience with database reliability by implementing a staging table swap to prevent users from seeing incomplete data during refresh cycles.",
+        "She articulated a mature approach to mentoring by guiding a junior engineer through a complex backfill task, focusing on questioning their mental model rather than simply correcting their code."
+      ]
+    },
+    "stage": "Evaluation"
+  },
+  "InterviewPlan:fbe04e587d5ca877": {
+    "prompt_excerpt": "Plan an interview of exactly 7 questions, numbered 1 to 7.\n\nRUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building ",
+    "response": {
+      "questions": [
+        {
+          "criterion_ids": [
+            "python_and_django_expertise"
+          ],
+          "depth": "opening",
+          "intent": "Ask the candidate to introduce themselves and their professional background.",
+          "slot": 1
+        },
+        {
+          "criterion_ids": [
+            "system_design_and_ownership"
+          ],
+          "depth": "opening",
+          "intent": "Ask the candidate to describe a significant project they worked on.",
+          "slot": 2
+        },
+        {
+          "criterion_ids": [
+            "python_and_django_expertise"
+          ],
+          "depth": "opening",
+          "intent": "Ask the candidate to detail their specific personal contribution to that project.",
+          "slot": 3
+        },
+        {
+          "criterion_ids": [
+            "postgresql_and_data_modelling"
+          ],
+          "depth": "probing",
+          "intent": "Probe the candidate's approach to PostgreSQL schema design and query optimization under load.",
+          "slot": 4
+        },
+        {
+          "criterion_ids": [
+            "mentoring_and_collaboration"
+          ],
+          "depth": "probing",
+          "intent": "Probe the candidate's experience with mentoring junior engineers and providing constructive feedback.",
+          "slot": 5
+        },
+        {
+          "criterion_ids": [
+            "system_design_and_ownership",
+            "technical_communication"
+          ],
+          "depth": "deep",
+          "intent": "Press the candidate on the trade-offs made during a production incident or architectural decision.",
+          "slot": 6
+        },
+        {
+          "criterion_ids": [
+            "python_and_django_expertise",
+            "postgresql_and_data_modelling"
+          ],
+          "depth": "deep",
+          "intent": "Press the candidate on complex Django ORM optimization strategies and handling data integrity in production.",
+          "slot": 7
+        }
+      ]
+    },
+    "stage": "InterviewPlan"
+  },
+  "Rubric:6a22f9992581ce76": {
+    "prompt_excerpt": "Build the scoring rubric for this role.\n\nJOB TITLE\nSenior Python Developer\n\nREQUIRED SKILLS\nPython, Django, PostgreSQL, REST APIs, System design\n\nEXPERIENCE REQUIRED\n4 to 7 years\n\n",
+    "response": {
+      "criteria": [
+        {
+          "description": "Demonstrable experience building and maintaining production services using Python and Django. Look for specific mentions of Django ORM optimization, middleware implementation, and handling complex business logic within the framework.",
+          "dimension": "technical",
+          "id": "python_and_django_expertise",
+          "name": "Python and Django expertise",
+          "points": 30
+        },
+        {
+          "description": "Evidence of designing, tuning, and maintaining PostgreSQL schemas under load. Look for experience with indexing strategies, query optimization, migration management, and handling data integrity in a production environment.",
+          "dimension": "technical",
+          "id": "postgresql_and_data_modelling",
+          "name": "PostgreSQL and data modelling",
+          "points": 25
+        },
+        {
+          "description": "Experience designing scalable REST APIs and taking full production ownership. Look for evidence of on-call experience, debugging production incidents, and making architectural trade-offs that balance performance with maintainability.",
+          "dimension": "experience",
+          "id": "system_design_and_ownership",
+          "name": "System design and ownership",
+          "points": 20
+        },
+        {
+          "description": "Ability to articulate the 'why' behind technical decisions. Look for examples of explaining trade-offs to non-technical stakeholders or product managers and documenting architectural choices clearly.",
+          "dimension": "communication",
+          "id": "technical_communication",
+          "name": "Technical communication",
+          "points": 15
+        },
+        {
+          "description": "Evidence of mentoring junior engineers and fostering team growth. Look for specific instances of conducting code reviews, pair programming, or providing constructive feedback that improved a teammate's output.",
+          "dimension": "communication",
+          "id": "mentoring_and_collaboration",
+          "name": "Mentoring and collaboration",
+          "points": 10
+        }
+      ],
+      "interview_topics": [
+        "Database schema design and query optimization strategies",
+        "Handling production incidents and on-call responsibilities",
+        "Architectural trade-offs in REST API design",
+        "Mentoring approaches and code review philosophy",
+        "Communicating technical constraints to product stakeholders"
+      ]
+    },
+    "stage": "Rubric"
+  },
+  "Screening:adaaa51ea54f7298": {
+    "prompt_excerpt": "Score this candidate against the rubric.\n\nRUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining pr",
+    "response": {
+      "assessment": "Priya demonstrates strong ownership of a production service, specifically highlighting her work on latency optimization through schema changes and indexed lookups. She clearly articulates the trade-offs made during technical decision-making and her collaboration with product stakeholders. While she mentions mentoring junior engineers, the evidence is limited to the fact of mentorship rather than specific methodologies or outcomes. Overall, she shows solid experience across all required technical domains.",
+      "matched_skills": [
+        "Python",
+        "Django",
+        "PostgreSQL",
+        "REST APIs",
+        "System design"
+      ],
+      "recommendation": "shortlist",
+      "resume_intro_conflicts": [],
+      "sub_scores": [
+        {
+          "criterion_id": "python_and_django_expertise",
+          "evidence": [
+            {
+              "quote": "mostly Python and Django with PostgreSQL underneath",
+              "source": "introduction"
+            },
+            {
+              "quote": "Zoho, 2021 to present: Python, Django, PostgreSQL.",
+              "source": "resume"
+            }
+          ],
+          "points_awarded": 25,
+          "points_possible": 30
+        },
+        {
+          "criterion_id": "postgresql_and_data_modelling",
+          "evidence": [
+            {
+              "quote": "I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup",
+              "source": "introduction"
+            },
+            {
+              "quote": "Owned a product recommendation service serving 200,000 daily active users end to end, from schema design to production monitoring.",
+              "source": "resume"
+            }
+          ],
+          "points_awarded": 22,
+          "points_possible": 25
+        },
+        {
+          "criterion_id": "system_design_and_ownership",
+          "evidence": [
+            {
+              "quote": "I was responsible for it end to end, from the schema design through to production monitoring.",
+              "source": "introduction"
+            },
+            {
+              "quote": "Owned a product recommendation service serving 200,000 daily active users end to end",
+              "source": "resume"
+            }
+          ],
+          "points_awarded": 18,
+          "points_possible": 20
+        },
+        {
+          "criterion_id": "technical_communication",
+          "evidence": [
+            {
+              "quote": "The tradeoff was freshness, so I talked it through with the product manager and we agreed a refresh interval we were both happy with.",
+              "source": "introduction"
+            }
+          ],
+          "points_awarded": 13,
+          "points_possible": 15
+        },
+        {
+          "criterion_id": "mentoring_and_collaboration",
+          "evidence": [
+            {
+              "quote": "I also mentor two junior engineers on the team.",
+              "source": "introduction"
+            },
+            {
+              "quote": "Mentored two junior engineers.",
+              "source": "resume"
+            }
+          ],
+          "points_awarded": 8,
+          "points_possible": 10
+        }
+      ],
+      "total_score": 86,
+      "unevidenced_skills": []
+    },
+    "stage": "Screening"
+  },
+  "TurnResult:56bf43515069a62d": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "anchored_on_claim": "Reduced p95 latency from 400ms to 48ms by moving to pre-computed tables.",
+      "answer_scores": [
+        {
+          "criterion_id": "python_and_django_expertise",
+          "evidence": "I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup and we came down to about 48 milliseconds.",
+          "points_awarded": 25,
+          "points_possible": 30
+        },
+        {
+          "criterion_id": "postgresql_and_data_modelling",
+          "evidence": "I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup",
+          "points_awarded": 20,
+          "points_possible": 25
+        },
+        {
+          "criterion_id": "system_design_and_ownership",
+          "evidence": "I owned a product recommendation service that served around 200,000 daily active users. I was responsible for it end to end, from the schema design through to production monitoring.",
+          "points_awarded": 18,
+          "points_possible": 20
+        },
+        {
+          "criterion_id": "technical_communication",
+          "evidence": "The tradeoff was freshness, so I talked it through with the product manager and we agreed a refresh interval we were both happy with.",
+          "points_awarded": 12,
+          "points_possible": 15
+        },
+        {
+          "criterion_id": "mentoring_and_collaboration",
+          "evidence": "I also mentor two junior engineers on the team.",
+          "points_awarded": 7,
+          "points_possible": 10
+        }
+      ],
+      "claims_made": [
+        "Owned a product recommendation service at Zoho serving 200,000 daily active users.",
+        "Reduced p95 latency from 400ms to 48ms by moving to pre-computed tables.",
+        "Mentors two junior engineers."
+      ],
+      "next_question": "When you moved to that pre-computed table, how did you handle potential race conditions or data consistency issues during the refresh process?",
+      "targets_criterion_ids": [
+        "system_design_and_ownership"
+      ],
+      "topics_identified": [
+        "backend engineering",
+        "latency optimization",
+        "database schema design",
+        "mentorship"
+      ]
+    },
+    "stage": "TurnResult"
+  },
+  "TurnResult:67ac2276e803bada": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "anchored_on_claim": "Used a Django REST endpoint to serve pre-computed recommendations.",
+      "answer_scores": [
+        {
+          "criterion_id": "python_and_django_expertise",
+          "evidence": "The recommendation API was a single Django REST endpoint that read from a pre-computed table rather than scoring at request time.",
+          "points_awarded": 25,
+          "points_possible": 30
+        }
+      ],
+      "claims_made": [
+        "Used a Django REST endpoint to serve pre-computed recommendations.",
+        "Implemented a staging table swap pattern to ensure data consistency during refreshes."
+      ],
+      "next_question": "In that Django REST endpoint, how did you handle the serialization of those pre-computed results to ensure the response time stayed under 50 milliseconds?",
+      "targets_criterion_ids": [
+        "python_and_django_expertise"
+      ],
+      "topics_identified": [
+        "Django REST Framework",
+        "API performance",
+        "database indexing",
+        "atomic table swaps"
+      ]
+    },
+    "stage": "TurnResult"
+  },
+  "TurnResult:73dc64be777cc313": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "anchored_on_claim": "Delegated end-to-end ownership of a batch backfill migration to a junior engineer.",
+      "answer_scores": [
+        {
+          "criterion_id": "mentoring_and_collaboration",
+          "evidence": "I try to ask what they expected to happen rather than telling them what is wrong, because that usually finds the mental model that is off. One of them shipped the batching for the backfill I mentioned, and I deliberately let them own it end to end rather than taking it back when it got slow.",
+          "points_awarded": 10,
+          "points_possible": 10
+        }
+      ],
+      "claims_made": [
+        "Uses Socratic questioning in code reviews to identify gaps in mental models.",
+        "Delegated end-to-end ownership of a batch backfill migration to a junior engineer."
+      ],
+      "next_question": "When that backfill process slowed down, what specific Django ORM patterns or database locking issues did you and your junior engineer identify as the primary cause?",
+      "targets_criterion_ids": [
+        "python_and_django_expertise",
+        "postgresql_and_data_modelling"
+      ],
+      "topics_identified": [
+        "mentorship strategy",
+        "code review process",
+        "delegation"
+      ]
+    },
+    "stage": "TurnResult"
+  },
+  "TurnResult:b3a7f93180f304aa": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "anchored_on_claim": "Resolved a cache stampede by implementing jittered refreshes and worker locks.",
+      "answer_scores": [
+        {
+          "criterion_id": "python_and_django_expertise",
+          "evidence": "I added a jittered refresh and a lock around the rebuild so only one worker does the work",
+          "points_awarded": 25,
+          "points_possible": 30
+        },
+        {
+          "criterion_id": "technical_communication",
+          "evidence": "walked the product manager through the freshness tradeoff so we could agree the refresh interval properly rather than me picking it alone",
+          "points_awarded": 15,
+          "points_possible": 15
+        }
+      ],
+      "claims_made": [
+        "Resolved a cache stampede by implementing jittered refreshes and worker locks.",
+        "Authored a postmortem for a production incident.",
+        "Negotiated refresh intervals with product management based on data freshness trade-offs."
+      ],
+      "next_question": "When you were saturating the database during that stampede, what specific PostgreSQL indexing or query patterns did you find were the biggest bottlenecks?",
+      "targets_criterion_ids": [
+        "postgresql_and_data_modelling"
+      ],
+      "topics_identified": [
+        "cache stampede",
+        "incident response",
+        "stakeholder management"
+      ]
+    },
+    "stage": "TurnResult"
+  },
+  "TurnResult:d55873217c7700de": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "anchored_on_claim": "Mentors two junior engineers.",
+      "answer_scores": [
+        {
+          "criterion_id": "postgresql_and_data_modelling",
+          "evidence": "I do it in two steps: add the column nullable, backfill in batches, then add the constraint. On indexing I look at the query plan first rather than guessing. The recommendation table had a composite index on user id and score",
+          "points_awarded": 20,
+          "points_possible": 25
+        }
+      ],
+      "claims_made": [
+        "Uses two-step migration pattern for large tables to avoid locking.",
+        "Uses batch backfilling for data migrations.",
+        "Uses EXPLAIN ANALYZE to inform indexing decisions.",
+        "Implemented composite index on user_id and score for recommendation lookups."
+      ],
+      "next_question": "You mentioned mentoring two junior engineers; can you describe a specific instance where you helped one of them improve their code through a review?",
+      "targets_criterion_ids": [
+        "mentoring_and_collaboration"
+      ],
+      "topics_identified": [
+        "PostgreSQL schema migrations",
+        "database indexing strategy",
+        "query plan analysis"
+      ]
+    },
+    "stage": "TurnResult"
+  },
+  "TurnResult:e1daaaf1660d3582": {
+    "prompt_excerpt": "RUBRIC\n[python_and_django_expertise] Python and Django expertise - worth 30 points\n    Demonstrable experience building and maintaining production services using Python and Django.",
+    "response": {
+      "anchored_on_claim": "Authored a postmortem for a production incident.",
+      "answer_scores": [
+        {
+          "criterion_id": "mentoring_and_collaboration",
+          "evidence": "",
+          "points_awarded": 0,
+          "points_possible": 10
+        }
+      ],
+      "claims_made": [
+        "Has not performed a manual primary database failover.",
+        "Understands connection draining and idempotent retries for failover scenarios."
+      ],
+      "next_question": "You authored a postmortem for a production incident; what was the most difficult trade-off you had to explain to stakeholders regarding the fix?",
+      "targets_criterion_ids": [
+        "system_design_and_ownership",
+        "technical_communication"
+      ],
+      "topics_identified": [
+        "database failover",
+        "managed services",
+        "idempotency"
+      ]
+    },
+    "stage": "TurnResult"
+  }
+}

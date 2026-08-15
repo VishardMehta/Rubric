@@ -1,6 +1,6 @@
 # Rubric screen specifications
 
-Nine screens. One landing, five HR, three candidate.
+Ten screens. One landing, one sign in, five HR, three candidate.
 
 Each spec gives purpose, layout, components, every state, and interactions.
 Token names refer to `DESIGN.md`. Behavior rules refer to `docs/design-system.md`.
@@ -62,6 +62,72 @@ only screen where marketing language is appropriate.
 
 ---
 
+## 0.5. Sign in
+
+**Route** `/signin` · **Shell** none, own layout · **Max width** 420
+
+Added with HR accounts (`docs/product.md` §7). The only HR route outside the
+session gate, and the only one outside `HRShell`: the shell's navigation
+points at pages that all require a session, so rendering it here would show a
+sidebar where every link bounces straight back.
+
+One screen with two modes, not two routes. The only difference between them
+is two extra fields, and a second route would mean a second place to keep the
+layout and error handling in sync.
+
+```
+                    ┌──────────────────────────────┐
+                    │  ◍ Rubric                    │
+                    │                              │
+                    │  Sign in to your workspace.  │
+                    │  Continue to the roles you   │
+                    │  have posted.                │
+                    │                              │
+                    │  Work email                  │
+                    │  ┌────────────────────────┐  │
+                    │  └────────────────────────┘  │
+                    │  Password                    │
+                    │  ┌────────────────────────┐  │
+                    │  └────────────────────────┘  │
+                    │  ┌────────────────────────┐  │
+                    │  │        Sign in         │  │
+                    │  └────────────────────────┘  │
+                    │  First time here? Create one │
+                    └──────────────────────────────┘
+```
+
+**Register mode** adds `Your name` above the email and `Company` (optional)
+below the password, and the title becomes `Create your workspace.` with the
+lede `Your roles and applicants are visible only to this account.` The
+password field gains the helper `At least 10 characters. Length matters more
+than symbols.`
+
+**Validation** On submit, not on blur: this form is short and the fields are
+familiar, so blur validation on an email someone is halfway through typing is
+noise. Email must look like an address, password must be present, and in
+register mode name is required and the password must reach 10 characters.
+
+**Errors** A wrong password is an answer to what was just typed, so it
+renders on the password field, not as an error block at the top of the page.
+The same for a duplicate email, which renders on the email field. Anything
+else, including a backend that is not running, uses `ApiErrorState` above the
+form.
+
+The message for a failed sign in never says which half was wrong. Saying
+"no account with that email" tells an attacker which addresses are
+registered.
+
+**After success** Go to the page the guard redirected from, or `/jobs`. The
+first account also claims every ownerless job, and the count is carried
+through so the dashboard can say so once rather than leaving pre-existing
+roles to appear with no explanation.
+
+**Not on this screen** No password reset, no social sign in, no "remember
+me". Reset needs email delivery, which is out of scope, and a link that opens
+a dead end is worse than no link.
+
+---
+
 ## 1. Jobs Dashboard
 
 **Route** `/jobs` · **Shell** HR
@@ -109,7 +175,28 @@ moves under the title.
 
 ## 2. Create Job
 
-**Route** `/jobs/new` · **Shell** HR · **Content max width** 640
+**Route** `/jobs/new` · **Shell** HR · **Layout** `Split`, form left, panel right
+
+Originally specified as a single 640px column. That left roughly half the
+1280px content area empty at all three stages, so a right panel was added in
+Phase B. It is not decoration: it shows the role exactly as the model will
+receive it, which is the one thing HR cannot otherwise see and the thing
+that decides how good the rubric is.
+
+| Stage | Right panel |
+|---|---|
+| A, form | "What Rubric will read". The assembled description, the facts as chips, and a character count against the 120 minimum. After a PDF import it names the file and lists which fields were filled |
+| B, generating | The same panel, so the screen does not blank out for the 3 to 8 second wait |
+| C, rubric | "What candidates will see". The opportunity page as an applicant will read it, beside the rubric that was built from it |
+
+The panel is sticky on wide screens and stacks under the 1180px `Split`
+breakpoint.
+
+**PDF import** fills the whole form, not just the description. It only ever
+writes into a field that is still empty, because overwriting something HR
+typed would lose their work to a guess, and the parser is explicitly allowed
+to return null for anything the document does not state. What it filled is
+listed in the panel rather than left to be noticed.
 
 Purpose: capture the job, then show the rubric that was generated from it. The
 rubric reveal is the moment the product explains itself, so it happens here and
@@ -266,9 +353,22 @@ to decide who to open.
 **Interactions**
 - Rubric row is a disclosure, collapsed by default. Expanding shows the full
   panel from screen 2
-- Filter tabs filter by recommendation band. Counts are live
-- Sorted by score descending. Rank column reflects that order and is not a
-  stored value
+- **Grouped by pipeline stage since Phase E**, replacing the recommendation
+  filter tabs. Order: Interviewed, Interview in progress, Awaiting
+  interview, Awaiting your decision, Rejected. The tabs put a scored
+  interview in the same undifferentiated run as an application from an hour
+  ago, and showed no interview score at all
+- Rejected renders collapsed behind a disclosure. Everything else is
+  expanded: a group you have to click to see is a group you forget is there.
+  Empty groups are dropped rather than shown with a zero
+- Interviewed rows carry an `Interview` column beside `Screening`, and open
+  the interview result rather than Candidate Detail, because the result is
+  what you opened the row to read
+- Sorted by score descending within each group: interview score for the
+  interviewed, screening score for everyone else. A missing score sorts last
+  rather than as zero. Rank is computed across the whole field and is not a
+  stored value, so a candidate's number is their standing overall and does
+  not change as they move between groups
 - Row click opens Candidate Detail
 - A candidate still in `applied` or `screening` shows an em-space in the score
   column and `Screening` as status, not a zero

@@ -16,6 +16,8 @@
  *    (design-system.md section 3).
  */
 
+import { clearToken, readToken, writeToken } from "../lib/session";
+
 const BASE_URL: string =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://127.0.0.1:8123";
 
@@ -32,6 +34,9 @@ export type ErrorCode =
   | "resume_too_large"
   | "resume_not_readable"
   | "resume_wrong_format"
+  | "job_description_too_large"
+  | "job_description_unreadable"
+  | "job_description_wrong_format"
   | "audio_unreadable"
   | "invalid_token"
   | "interview_already_complete"
@@ -39,6 +44,12 @@ export type ErrorCode =
   | "already_applied"
   | "candidate_not_found"
   | "rate_limited"
+  | "provider_timeout"
+  | "cassette_miss"
+  | "not_authenticated"
+  | "invalid_credentials"
+  | "email_already_registered"
+  | "weak_password"
   | "internal_error"
   | "network_error";
 
@@ -96,6 +107,19 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+/*
+ * Every request carries the HR bearer token when there is one.
+ *
+ * Attached here rather than per call so a new HR endpoint cannot be added
+ * without it. The candidate routes ignore the header entirely, so sending
+ * it on those is harmless and keeps this a single rule with no allowlist
+ * to fall out of date.
+ */
+function authHeaders(): Record<string, string> {
+  const token = readToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", json, form, signal } = options;
 
@@ -104,9 +128,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     response = await fetch(`${BASE_URL}/api${path}`, {
       method,
       signal,
-      // Content-Type is set only for JSON. For FormData the browser must
-      // set it itself so it can append the multipart boundary.
-      headers: json === undefined ? undefined : { "Content-Type": "application/json" },
+      headers: {
+        // Content-Type is set only for JSON. For FormData the browser must
+        // set it itself so it can append the multipart boundary.
+        ...(json === undefined ? {} : { "Content-Type": "application/json" }),
+        ...authHeaders(),
+      },
       body: json !== undefined ? JSON.stringify(json) : form,
     });
   } catch (cause) {
@@ -115,9 +142,42 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError("network_error", NETWORK_ERROR_MESSAGE, true, 0);
   }
 
-  if (!response.ok) throw await toApiError(response);
+  if (!response.ok) {
+    const error = await toApiError(response);
+    // An expired or revoked session. Dropping the dead token here means
+    // every screen returns to the sign-in page without each one needing
+    // to handle 401 for itself.
+    if (error.code === "not_authenticated") clearToken();
+    throw error;
+  }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+// --- Types: HR accounts ----------------------------------------------------
+
+/** The signed-in account. Carries no credential material of any kind. */
+export interface HRAccount {
+  id: string;
+  email: string;
+  name: string;
+  company: string | null;
+}
+
+export interface RegisterInput {
+  email: string;
+  name: string;
+  password: string;
+  company?: string | null;
+}
+
+export interface SessionResponse {
+  token: string;
+  expires_at: string;
+  account: HRAccount;
+  /** Pre-existing ownerless jobs this account just claimed. Only ever
+   *  non-zero for the very first account. */
+  claimed_jobs: number;
 }
 
 // --- Types: rubric ---------------------------------------------------------
@@ -147,6 +207,14 @@ export interface JobCreate {
   description: string;
   skills: string[];
   experience: string | null;
+  /* Real columns, not appended to the description. The workplace and
+   * employment values are constrained in the database, so they must match
+   * jobs_workplace_type_check and jobs_employment_type_check exactly. */
+  department?: string | null;
+  location?: string | null;
+  workplace_type?: string | null;
+  employment_type?: string | null;
+  compensation?: string | null;
 }
 
 export interface JobSummary {
@@ -164,6 +232,32 @@ export interface JobDetail extends JobSummary {
   skills: string[];
   experience: string | null;
   rubric: Rubric | null;
+  department: string | null;
+  location: string | null;
+  workplace_type: string | null;
+  employment_type: string | null;
+  compensation: string | null;
+}
+
+/** Facts parsed out of an uploaded job description. Every field the
+ *  document did not state is null: the parser is told to leave a gap
+ *  rather than guess, because a fabricated salary gets published. */
+export interface JobFacts {
+  title: string | null;
+  department: string | null;
+  location: string | null;
+  workplace_type: string | null;
+  employment_type: string | null;
+  compensation: string | null;
+  skills: string[];
+  experience: string | null;
+  description: string;
+}
+
+export interface JobDescriptionDocument {
+  text: string;
+  /** Null when parsing failed. The raw text is still usable. */
+  facts: JobFacts | null;
 }
 
 /** What a candidate is allowed to see. Never carries the rubric. */
@@ -171,6 +265,74 @@ export interface PublicJobSummary {
   id: string;
   title: string;
   state: JobState;
+  description: string;
+  skills: string[];
+  experience: string | null;
+  created_at: string;
+  department: string | null;
+  location: string | null;
+  workplace_type: string | null;
+  employment_type: string | null;
+  compensation: string | null;
+}
+
+// --- Types: resume profile -------------------------------------------------
+
+/* Structured for display only. Screening reads the raw resume text against
+ * the rubric and remains the only thing that produces a number, so nothing
+ * here is ever used to derive or explain a score. Every field is optional
+ * because a sparse resume is a real resume, not a parse failure. */
+export interface EducationEntry {
+  institution: string;
+  qualification: string | null;
+  field_of_study: string | null;
+  period: string | null;
+  result: string | null;
+}
+
+export interface ExperienceEntry {
+  organisation: string;
+  role: string | null;
+  period: string | null;
+  highlights: string[];
+}
+
+export interface ResumeProfile {
+  headline: string | null;
+  education: EducationEntry[];
+  experience: ExperienceEntry[];
+  skills: string[];
+  links: string[];
+}
+
+// --- Types: candidate portal -----------------------------------------------
+
+/* What an applicant may see about their own application.
+ *
+ * Deliberately carries no score, band, recommendation or assessment. The
+ * candidate never sees a score, at any point (product.md section 2), and
+ * the backend builds this response field by field from a whitelist rather
+ * than from a candidate row. Do not widen this type to "reuse" it for an
+ * HR screen. */
+export type ApplicationStatus =
+  | "submitted"
+  | "in_review"
+  | "interview_ready"
+  | "interview_in_progress"
+  | "interview_complete"
+  | "closed";
+
+export interface CandidateApplication {
+  candidate_id: string;
+  job_id: string;
+  job_title: string;
+  applied_at: string;
+  status: ApplicationStatus;
+  status_label: string;
+  status_detail: string;
+  /** Present only once the hiring team has sent it, and withdrawn once the
+   *  interview is finished. */
+  interview_url: string | null;
 }
 
 // --- Types: candidates -----------------------------------------------------
@@ -209,6 +371,11 @@ export interface CandidateSummary {
   skills_total: number;
   state: CandidateState;
   created_at: string;
+  /** Present once an interview exists. Job Detail leads with candidates who
+   *  have been interviewed and cannot rank them without the score. */
+  interview_status: InterviewStatus | null;
+  interview_score: number | null;
+  interview_band: Band | null;
 }
 
 export interface CandidateDetail {
@@ -233,6 +400,10 @@ export interface CandidateDetail {
   audio_url: string | null;
   resume_url: string | null;
   resume_text: string | null;
+  /** Structured for display only. Null when parsing failed or the row
+   *  predates the feature, in which case the screen falls back to the raw
+   *  resume_text disclosure. */
+  resume_profile: ResumeProfile | null;
 
   interview_status: InterviewStatus | null;
   interview_token: string | null;
@@ -302,13 +473,51 @@ export interface InterviewResult {
 // --- Routes ----------------------------------------------------------------
 
 export const api = {
-  health: () => request<{ status: string }>("/health"),
+  health: () => request<{ status: string; demo_auth?: boolean }>("/health"),
+
+  // HR: accounts
+  //
+  // register and login are the only calls that receive a token, and both
+  // store it immediately. No caller ever handles the raw token, so there
+  // is one place it can be persisted and one place it can be dropped.
+  register: async (input: RegisterInput) => {
+    const session = await request<SessionResponse>("/auth/register", {
+      method: "POST",
+      json: input,
+    });
+    writeToken(session.token);
+    return session;
+  },
+  login: async (email: string, password: string) => {
+    const session = await request<SessionResponse>("/auth/login", {
+      method: "POST",
+      json: { email, password },
+    });
+    writeToken(session.token);
+    return session;
+  },
+  logout: async () => {
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } finally {
+      // The local token is dropped even if the server call fails. Being
+      // signed out locally while a row lingers is recoverable; the reverse
+      // leaves someone looking at a workspace they think they left.
+      clearToken();
+    }
+  },
+  me: () => request<HRAccount>("/auth/me"),
 
   // HR: jobs
   listJobs: () => request<JobSummary[]>("/jobs"),
   getJob: (jobId: string) => request<JobDetail>(`/jobs/${jobId}`),
   createJob: (payload: JobCreate) =>
     request<JobDetail>("/jobs", { method: "POST", json: payload }),
+  extractJobDescription: (document: File) => {
+    const form = new FormData();
+    form.append("document", document, document.name);
+    return request<JobDescriptionDocument>("/jobs/description-document", { method: "POST", form });
+  },
   regenerateRubric: (jobId: string) =>
     request<JobDetail>(`/jobs/${jobId}/rubric/regenerate`, { method: "POST" }),
 
@@ -321,12 +530,17 @@ export const api = {
     request<CandidateSummary>(`/candidates/${candidateId}/reject`, { method: "POST" }),
   rescreenCandidate: (candidateId: string) =>
     request<CandidateDetail>(`/candidates/${candidateId}/rescreen`, { method: "POST" }),
+  reparseResume: (candidateId: string) =>
+    request<CandidateDetail>(`/candidates/${candidateId}/reparse-resume`, { method: "POST" }),
   getInterviewResult: (candidateId: string) =>
     request<InterviewResult>(`/candidates/${candidateId}/interview`),
   retryEvaluation: (candidateId: string) =>
     request<InterviewResult>(`/candidates/${candidateId}/interview/evaluate`, { method: "POST" }),
 
   // Candidate: application
+  listPublicJobs: () => request<PublicJobSummary[]>("/apply"),
+  listApplications: (email: string) =>
+    request<CandidateApplication[]>(`/applications?email=${encodeURIComponent(email)}`),
   getPublicJob: (jobId: string) => request<PublicJobSummary>(`/apply/${jobId}`),
 
   // Candidate: interview

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PageHeader } from "../../components/layout";
-import { Button, Select, TagInput, TextArea, TextField } from "../../components/primitives";
+import { PageHeader, Split } from "../../components/layout";
+import { Button, Chip, Select, TagInput, TextArea, TextField } from "../../components/primitives";
 import { ErrorState, LoadingState } from "../../components/feedback";
 import { CopyLinkField, RubricPanel } from "../../components/domain";
 import { api, ApiError } from "../../api/client";
@@ -40,6 +40,18 @@ export function CreateJobPage() {
   const [description, setDescription] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [experience, setExperience] = useState("");
+  const [department, setDepartment] = useState("");
+  const [location, setLocation] = useState("");
+  const [workplaceType, setWorkplaceType] = useState("");
+  const [employmentType, setEmploymentType] = useState("full_time");
+  const [compensation, setCompensation] = useState("");
+  const [sourceDocument, setSourceDocument] = useState<File | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  // What the last PDF import actually filled in. Shown in the side panel
+  // so the extraction is visible rather than silently rewriting the form
+  // under the recruiter.
+  const [imported, setImported] = useState<{ filename: string; filled: string[] } | null>(null);
 
   const [touched, setTouched] = useState({ title: false, description: false, skills: false });
 
@@ -72,6 +84,15 @@ export function CreateJobPage() {
         description: description.trim(),
         skills,
         experience: experience || null,
+        // Real columns since database/002_accounts.sql. These used to be
+        // appended to the description string, which meant a candidate
+        // could never be shown them as fields and HR could never edit one
+        // without editing prose.
+        department: department.trim() || null,
+        location: location.trim() || null,
+        workplace_type: workplaceType || null,
+        employment_type: employmentType || null,
+        compensation: compensation.trim() || null,
       });
       setJob(created);
       setStage("rubric");
@@ -83,7 +104,72 @@ export function CreateJobPage() {
       setFailure(cause instanceof ApiError ? cause : null);
       setStage("form");
     }
-  }, [valid, title, description, skills, experience]);
+  }, [valid, title, description, skills, experience, department, location, workplaceType, employmentType, compensation]);
+
+  const importDocument = useCallback(async () => {
+    if (!sourceDocument) return;
+    setDocumentLoading(true);
+    setDocumentError(null);
+    setImported(null);
+    try {
+      const extracted = await api.extractJobDescription(sourceDocument);
+      const facts = extracted.facts;
+
+      // Without facts the endpoint behaves as it always did: the raw text
+      // goes into the description and HR fills the rest in by hand.
+      setDescription(facts?.description?.trim() || extracted.text);
+      setTouched((current) => ({ ...current, description: true }));
+
+      if (facts) {
+        // Only ever fills a field that is still empty. Overwriting
+        // something HR typed would lose their work to a guess, and the
+        // parser is explicitly allowed to return null for anything the
+        // document does not state.
+        const filled: string[] = [];
+        const fill = (
+          label: string,
+          value: string | null | undefined,
+          current: string,
+          set: (next: string) => void,
+        ) => {
+          if (value && !current.trim()) {
+            set(value);
+            filled.push(label);
+          }
+        };
+
+        fill("Job title", facts.title, title, setTitle);
+        fill("Team or department", facts.department, department, setDepartment);
+        fill("Location", facts.location, location, setLocation);
+        fill("Workplace type", facts.workplace_type, workplaceType, setWorkplaceType);
+        fill("Employment type", facts.employment_type, employmentType, setEmploymentType);
+        fill("Compensation", facts.compensation, compensation, setCompensation);
+        fill("Experience required", facts.experience, experience, setExperience);
+
+        if (facts.skills.length > 0 && skills.length === 0) {
+          setSkills(facts.skills);
+          filled.push("Required skills");
+        }
+        setImported({ filename: sourceDocument.name, filled });
+      } else {
+        setImported({ filename: sourceDocument.name, filled: [] });
+      }
+    } catch (cause) {
+      setDocumentError(cause instanceof ApiError ? cause.message : "The PDF could not be read. Try another file.");
+    } finally {
+      setDocumentLoading(false);
+    }
+  }, [
+    sourceDocument,
+    title,
+    department,
+    location,
+    workplaceType,
+    employmentType,
+    compensation,
+    experience,
+    skills,
+  ]);
 
   // --- Stage B, generating ------------------------------------------------
   // A single real state. No fake sub-steps: the backend makes one model
@@ -92,12 +178,33 @@ export function CreateJobPage() {
     return (
       <>
         <PageHeader title="Post a job" breadcrumb={{ label: "Jobs", to: "/jobs" }} />
-        <div className="rb-createjob__generating">
-          <LoadingState label="Analyzing job description" block />
-          <p className="rb-createjob__generating-body">
-            Extracting criteria and assigning point allocations.
-          </p>
-        </div>
+        <Split
+          left={
+            <div className="rb-createjob__generating">
+              <LoadingState label="Analyzing job description" block />
+              <p className="rb-createjob__generating-body">
+                Extracting criteria and assigning point allocations.
+              </p>
+            </div>
+          }
+          right={
+            // The submitted role stays on screen for the wait. Blanking the
+            // panel would make the screen look like it had lost the form.
+            <RolePanel
+              title={title}
+              description={description}
+              skills={skills}
+              experience={experience}
+              department={department}
+              location={location}
+              workplaceType={workplaceType}
+              employmentType={employmentType}
+              compensation={compensation}
+              imported={imported}
+              heading="Being analyzed"
+            />
+          }
+        />
       </>
     );
   }
@@ -107,31 +214,36 @@ export function CreateJobPage() {
     return (
       <>
         <PageHeader title="Rubric ready" breadcrumb={{ label: "Jobs", to: "/jobs" }} />
-        <div className="rb-createjob__reveal">
-          <p className="rb-createjob__lede">
-            Every applicant will be scored against these criteria.
-          </p>
+        <Split
+          left={
+            <div className="rb-createjob__reveal">
+              <p className="rb-createjob__lede">
+                Every applicant will be scored against these criteria.
+              </p>
 
-          <RubricPanel rubric={job.rubric} />
+              <RubricPanel rubric={job.rubric} />
 
-          <div className="rb-createjob__link">
-            <h2 className="text-title-3 rb-createjob__link-title">Application link</h2>
-            <CopyLinkField
-              url={`${window.location.origin}/apply/${job.id}`}
-              toastMessage="Application link copied"
-              help="Share this with candidates. They apply with a resume and a spoken introduction."
-            />
-          </div>
+              <div className="rb-createjob__link">
+                <h2 className="text-title-3 rb-createjob__link-title">Application link</h2>
+                <CopyLinkField
+                  url={`${window.location.origin}/apply/${job.id}`}
+                  toastMessage="Application link copied"
+                  help="Share this with candidates. They apply with a resume and a spoken introduction."
+                />
+              </div>
 
-          <div className="rb-createjob__actions">
-            <Button onClick={() => void regenerate(job, setJob, setStage, setFailure)}>
-              Regenerate rubric
-            </Button>
-            <Button level="primary" onClick={() => navigate(`/jobs/${job.id}`)}>
-              Go to job
-            </Button>
-          </div>
-        </div>
+              <div className="rb-createjob__actions">
+                <Button onClick={() => void regenerate(job, setJob, setStage, setFailure)}>
+                  Regenerate rubric
+                </Button>
+                <Button level="primary" onClick={() => navigate(`/jobs/${job.id}`)}>
+                  Go to job
+                </Button>
+              </div>
+            </div>
+          }
+          right={<CandidatePreview job={job} />}
+        />
       </>
     );
   }
@@ -151,61 +263,165 @@ export function CreateJobPage() {
         </div>
       )}
 
-      <form
-        className="rb-createjob__form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-        noValidate
-      >
-        <TextField
-          label="Job title"
-          help="The role as it will appear to candidates."
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          onBlur={() => setTouched((t) => ({ ...t, title: true }))}
-          error={titleError}
-        />
+      <Split
+        left={
+          <>
+            <form
+              className="rb-createjob__form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submit();
+              }}
+              noValidate
+            >
+              <TextField
+                label="Job title"
+                help="The role as it will appear to candidates."
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, title: true }))}
+                error={titleError}
+              />
 
-        <TextArea
-          label="Job description"
-          help="Rubric reads this to build the scoring criteria. More detail produces a better rubric."
-          minHeight={200}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          onBlur={() => setTouched((t) => ({ ...t, description: true }))}
-          error={descriptionError}
-        />
+              <fieldset className="rb-createjob__context">
+                <legend>Role context</legend>
+                <p>Clear location, working arrangement, and employment terms help candidates self-select before they apply.</p>
+                <div className="rb-createjob__field-grid">
+                  <TextField
+                    label="Team or department"
+                    optional
+                    placeholder="Product engineering"
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
+                  />
+                  <TextField
+                    label="Location"
+                    optional
+                    placeholder="Bengaluru, India"
+                    value={location}
+                    onChange={(event) => setLocation(event.target.value)}
+                  />
+                  <Select
+                    label="Workplace type"
+                    optional
+                    value={workplaceType}
+                    onChange={(event) => setWorkplaceType(event.target.value)}
+                    options={[
+                      { value: "", label: "Select arrangement" },
+                      // Lowercase, matching jobs_workplace_type_check in
+                      // database/002_accounts.sql.
+                      { value: "remote", label: "Remote" },
+                      { value: "hybrid", label: "Hybrid" },
+                      { value: "onsite", label: "On-site" },
+                    ]}
+                  />
+                  <Select
+                    label="Employment type"
+                    value={employmentType}
+                    onChange={(event) => setEmploymentType(event.target.value)}
+                    options={[
+                      // Underscores, matching jobs_employment_type_check in
+                      // database/002_accounts.sql. Hyphens here would fail
+                      // the constraint on every insert.
+                      { value: "full_time", label: "Full-time" },
+                      { value: "part_time", label: "Part-time" },
+                      { value: "contract", label: "Contract" },
+                      { value: "internship", label: "Internship" },
+                    ]}
+                  />
+                </div>
+                <TextField
+                  label="Compensation"
+                  optional
+                  help="Share a range and pay period when it is appropriate for the role."
+                  placeholder="₹18–24 LPA · annual base"
+                  value={compensation}
+                  onChange={(event) => setCompensation(event.target.value)}
+                />
+              </fieldset>
 
-        <TagInput
-          label="Required skills"
-          placeholder="Type a skill and press Enter"
-          value={skills}
-          onChange={(next) => {
-            setSkills(next);
-            setTouched((t) => ({ ...t, skills: true }));
-          }}
-          error={skillsError}
-        />
+              <section className="rb-createjob__document" aria-labelledby="job-document-heading">
+                <div>
+                  <p className="text-label">Optional source</p>
+                  <h2 id="job-document-heading" className="text-title-3">Upload a job-description PDF</h2>
+                  <p>Rubric extracts the text into the editable field below. Review it before building the rubric.</p>
+                </div>
+                <div className="rb-createjob__document-actions">
+                  <label className="rb-createjob__file-control">
+                    <span>{sourceDocument ? sourceDocument.name : "Choose PDF"}</span>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(event) => {
+                        setSourceDocument(event.target.files?.[0] ?? null);
+                        setDocumentError(null);
+                      }}
+                    />
+                  </label>
+                  <Button type="button" disabled={!sourceDocument || documentLoading} onClick={() => void importDocument()}>
+                    {documentLoading ? "Extracting…" : "Use document text"}
+                  </Button>
+                </div>
+                {documentError && <p className="rb-createjob__document-error">{documentError}</p>}
+              </section>
 
-        <Select
-          label="Experience required"
-          optional
-          options={EXPERIENCE_OPTIONS}
-          value={experience}
-          onChange={(event) => setExperience(event.target.value)}
-        />
+              <TextArea
+                label="Job description"
+                help="Rubric reads this to build the scoring criteria. More detail produces a better rubric."
+                minHeight={200}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, description: true }))}
+                error={descriptionError}
+              />
 
-        <div className="rb-createjob__submit">
-          <Button type="submit" level="primary" disabled={!valid}>
-            Build rubric
-          </Button>
-        </div>
-      </form>
+              <TagInput
+                label="Required skills"
+                placeholder="Type a skill and press Enter"
+                value={skills}
+                onChange={(next) => {
+                  setSkills(next);
+                  setTouched((t) => ({ ...t, skills: true }));
+                }}
+                error={skillsError}
+              />
+
+              <Select
+                label="Experience required"
+                optional
+                options={EXPERIENCE_OPTIONS}
+                value={experience}
+                onChange={(event) => setExperience(event.target.value)}
+              />
+
+              <div className="rb-createjob__submit">
+                <Button type="submit" level="primary" disabled={!valid}>
+                  Build rubric
+                </Button>
+              </div>
+            </form>
+          </>
+        }
+          right={
+            <RolePanel
+              title={title}
+              description={description}
+              skills={skills}
+              experience={experience}
+              department={department}
+              location={location}
+              workplaceType={workplaceType}
+              employmentType={employmentType}
+              compensation={compensation}
+              imported={imported}
+              heading="What Rubric will read"
+            />
+          }
+        />
     </>
   );
 }
+
 
 /**
  * screens.md section 2: regenerate is a secondary action that warns if
@@ -238,3 +454,182 @@ async function regenerate(
     setStage("rubric");
   }
 }
+
+
+/*
+ * The right column of Create Job.
+ *
+ * Before this the form sat at 640px inside a 1280px content area and the
+ * remaining half of the screen was empty at every stage. What fills it has
+ * to earn the space: this shows the role exactly as the model will receive
+ * it, which is the one thing HR cannot otherwise see and the thing that
+ * decides how good the rubric is.
+ */
+function RolePanel({
+  title,
+  description,
+  skills,
+  experience,
+  department,
+  location,
+  workplaceType,
+  employmentType,
+  compensation,
+  imported,
+  heading,
+}: {
+  title: string;
+  description: string;
+  skills: string[];
+  experience: string;
+  department: string;
+  location: string;
+  workplaceType: string;
+  employmentType: string;
+  compensation: string;
+  imported: { filename: string; filled: string[] } | null;
+  heading: string;
+}) {
+  const facts = [
+    { label: "Department", value: department },
+    { label: "Location", value: location },
+    { label: "Workplace", value: WORKPLACE_LABELS[workplaceType] ?? workplaceType },
+    { label: "Employment", value: EMPLOYMENT_LABELS[employmentType] ?? employmentType },
+    { label: "Compensation", value: compensation },
+    { label: "Experience", value: experience },
+  ].filter((fact) => fact.value.trim().length > 0);
+
+  const length = description.trim().length;
+  const short = length > 0 && length < DESCRIPTION_MIN_CHARS;
+
+  return (
+    <aside className="rb-rolepanel" aria-label={heading}>
+      <p className="text-label rb-rolepanel__eyebrow">{heading}</p>
+
+      {imported && (
+        <div className="rb-rolepanel__imported">
+          <p className="rb-rolepanel__imported-file">{imported.filename}</p>
+          {imported.filled.length > 0 ? (
+            <p className="text-caption">
+              Filled {imported.filled.join(", ")}. Anything the document did not
+              state was left for you.
+            </p>
+          ) : (
+            <p className="text-caption">
+              The text was imported. Nothing else could be read from it with
+              confidence, so the remaining fields are yours to fill.
+            </p>
+          )}
+        </div>
+      )}
+
+      <h2 className="text-title-3 rb-rolepanel__title">
+        {title.trim() || "Untitled role"}
+      </h2>
+
+      {facts.length > 0 && (
+        <dl className="rb-rolepanel__facts">
+          {facts.map((fact) => (
+            <div key={fact.label}>
+              <dt>{fact.label}</dt>
+              <dd>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {skills.length > 0 && (
+        <div className="rb-rolepanel__skills">
+          {skills.map((skill) => (
+            <Chip key={skill} tone="neutral">
+              {skill}
+            </Chip>
+          ))}
+        </div>
+      )}
+
+      <div className="rb-rolepanel__body">
+        {description.trim() ? (
+          <p>{description.trim()}</p>
+        ) : (
+          <p className="rb-rolepanel__placeholder">
+            The description goes to the model as written. The more concretely it
+            names the work, the sharper the criteria it produces.
+          </p>
+        )}
+      </div>
+
+      {length > 0 && (
+        <p className={`text-caption rb-rolepanel__count${short ? " rb-rolepanel__count--short" : ""}`}>
+          {short
+            ? `${length} of ${DESCRIPTION_MIN_CHARS} characters needed`
+            : `${length} characters`}
+        </p>
+      )}
+    </aside>
+  );
+}
+
+/*
+ * Stage C. The first chance HR gets to see the role the way an applicant
+ * will, next to the rubric that was built from it.
+ */
+function CandidatePreview({ job }: { job: JobDetail }) {
+  const facts = [
+    { label: "Location", value: job.location },
+    { label: "Workplace", value: job.workplace_type ? WORKPLACE_LABELS[job.workplace_type] : null },
+    { label: "Employment", value: job.employment_type ? EMPLOYMENT_LABELS[job.employment_type] : null },
+    { label: "Compensation", value: job.compensation },
+    { label: "Experience", value: job.experience },
+  ].filter((fact) => fact.value);
+
+  return (
+    <aside className="rb-rolepanel" aria-label="Candidate preview">
+      <p className="text-label rb-rolepanel__eyebrow">What candidates will see</p>
+      <h2 className="text-title-3 rb-rolepanel__title">{job.title}</h2>
+
+      {facts.length > 0 && (
+        <dl className="rb-rolepanel__facts">
+          {facts.map((fact) => (
+            <div key={fact.label}>
+              <dt>{fact.label}</dt>
+              <dd>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {job.skills.length > 0 && (
+        <div className="rb-rolepanel__skills">
+          {job.skills.map((skill) => (
+            <Chip key={skill} tone="neutral">
+              {skill}
+            </Chip>
+          ))}
+        </div>
+      )}
+
+      <div className="rb-rolepanel__body">
+        <p>{job.description}</p>
+      </div>
+
+      <p className="text-caption rb-rolepanel__note">
+        The rubric is never shown to candidates. It would tell them exactly what
+        to say.
+      </p>
+    </aside>
+  );
+}
+
+const WORKPLACE_LABELS: Record<string, string> = {
+  remote: "Remote",
+  hybrid: "Hybrid",
+  onsite: "On-site",
+};
+
+const EMPLOYMENT_LABELS: Record<string, string> = {
+  full_time: "Full time",
+  part_time: "Part time",
+  contract: "Contract",
+  internship: "Internship",
+};

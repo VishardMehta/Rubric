@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/primitives";
 import { ErrorState } from "../../components/feedback";
-import { AudioLevelMeter, MicrophoneBlocked, VoiceOrb } from "../../components/domain";
+import { AudioLevelMeter, CameraPreview, MicrophoneBlocked, VoiceOrb } from "../../components/domain";
 import type { OrbState } from "../../components/domain";
 import { api, ApiError, submitAnswerStreaming } from "../../api/client";
 import type { InterviewSession, TurnStage } from "../../api/client";
@@ -72,11 +72,11 @@ export function InterviewPage() {
   // cannot shrink it without blurring the backing store. It is measured
   // here and re-created at the right resolution instead.
   const [orbSize, setOrbSize] = useState(() =>
-    typeof window !== "undefined" && window.innerWidth < 768 ? 200 : 280,
+    typeof window !== "undefined" && window.innerWidth < 768 ? 160 : 280,
   );
   useEffect(() => {
     const compact = window.matchMedia("(max-width: 767px)");
-    const apply = () => setOrbSize(compact.matches ? 200 : 280);
+    const apply = () => setOrbSize(compact.matches ? 160 : 280);
     apply();
     compact.addEventListener("change", apply);
     return () => compact.removeEventListener("change", apply);
@@ -329,6 +329,9 @@ export function InterviewPage() {
             Find somewhere quiet. Your microphone stays on for the whole
             interview.
           </p>
+          <div className="rb-interview__ready-orb" aria-hidden="true">
+            <VoiceOrb state="idle" analyser={recorder.analyser} size={160} />
+          </div>
           <div className="rb-interview__start">
             <Button
               level="primary"
@@ -389,13 +392,16 @@ export function InterviewPage() {
 
         {/* The control region is a fixed height so replacing the button
             with a status label causes no layout shift (screens.md stage 3). */}
-        <div className="rb-interview__orb">
-          <VoiceOrb
-            state={orbState}
-            analyser={recorder.analyser}
-            impulse={impulse}
-            size={orbSize}
-          />
+        <div className="rb-interview__presence">
+          <CameraPreview />
+          <div className={`rb-interview__orb rb-interview__orb--${orbState}`}>
+            <VoiceOrb
+              state={orbState}
+              analyser={recorder.analyser}
+              impulse={impulse}
+              size={orbSize}
+            />
+          </div>
         </div>
 
         <div className="rb-interview__control">

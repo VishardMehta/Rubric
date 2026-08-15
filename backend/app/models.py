@@ -417,6 +417,194 @@ class Screening(BaseModel):
 
 
 # ---------------------------------------------------------------------
+# Candidate portal. What an applicant may see about their own application.
+# ---------------------------------------------------------------------
+#
+# The candidate never sees a score, at any point, including on completion
+# (product.md section 2). This is the single most likely place in the API
+# for one to leak, because it is the only candidate-facing response built
+# from a candidate row, and that row carries screening_score,
+# screening_band, recommendation, sub_scores and assessment.
+#
+# The defence is that this model is built field by field from an explicit
+# whitelist, never by copying a row or spreading another model. A test
+# asserts the serialized response contains none of those keys.
+
+
+class CandidateApplication(BaseModel):
+    """One application, as the person who submitted it may see it."""
+
+    candidate_id: str
+    job_id: str
+    job_title: str
+    applied_at: str
+
+    # A coarser vocabulary than the internal candidate state on purpose.
+    # `rejected` and `screened` are words for the hiring team; a candidate
+    # is told their application is closed, not that it scored 42.
+    status: Literal[
+        "submitted", "in_review", "interview_ready", "interview_in_progress",
+        "interview_complete", "closed",
+    ]
+    status_label: str
+    status_detail: str
+
+    # Present only once HR has sent the invitation, and withdrawn once the
+    # interview is finished so a completed link cannot be reopened from
+    # here.
+    interview_url: str | None = None
+
+
+# ---------------------------------------------------------------------
+# Resume profile. Structured facts for Candidate Detail.
+# ---------------------------------------------------------------------
+#
+# Not a scoring stage, and deliberately kept away from one. Screening reads
+# the raw resume text against the rubric and is the only thing that
+# produces a number. This exists so HR can see who they are looking at
+# without reading a wall of extracted text, and nothing here feeds a score.
+
+
+class EducationEntry(BaseModel):
+    institution: str = Field(description="School or university, as written.")
+    qualification: str | None = Field(
+        default=None,
+        description="Degree or certificate, for example 'B.Tech' or 'Class XII'. Null if unstated.",
+    )
+    field_of_study: str | None = Field(
+        default=None,
+        description="Subject, for example 'Computer Science'. Null if unstated.",
+    )
+    period: str | None = Field(
+        default=None,
+        description=(
+            "Dates exactly as the resume writes them, for example '2023 - 2027' "
+            "or 'Aug 2023 to Aug 2027'. Null when no dates are given. Do not "
+            "compute or complete a range the resume left open."
+        )
+    )
+    result: str | None = Field(
+        default=None,
+        description=(
+            "Grade as written, for example 'CGPA 8.78' or '92.4%'. Null if "
+            "the resume does not state one."
+        )
+    )
+
+
+class ExperienceEntry(BaseModel):
+    organisation: str = Field(description="Employer or organisation, as written.")
+    role: str | None = Field(
+        default=None,
+        description="Job title, for example 'Data Science Intern'. Null if unstated.",
+    )
+    period: str | None = Field(
+        default=None,
+        description=(
+            "Dates exactly as written, for example 'June to August 2026'. Null "
+            "when the resume gives none."
+        )
+    )
+    highlights: list[str] = Field(
+        description=(
+            "Up to three of what this person actually did in this role, each a "
+            "short phrase taken from the resume's own bullets. Prefer the ones "
+            "naming a concrete task, tool or result over the ones describing a "
+            "responsibility in the abstract."
+        )
+    )
+
+
+class ResumeProfile(BaseModel):
+    """A structured reading of one resume.
+
+    Every field is optional or a list that may be empty, because resumes
+    vary enormously and a sparse one is a real resume rather than a
+    failure. Nothing here is inferred: if the document does not state a
+    graduation year, the field is null rather than computed from context.
+    A fabricated date attached to a named person is worse than a gap.
+    """
+
+    headline: str | None = Field(
+        default=None,
+        description=(
+            "One line describing what this person is, in your own words but "
+            "grounded only in the resume, for example 'Final year computer "
+            "science student with analytics internships'. Under 15 words. "
+            "Null if the resume is too sparse to characterise."
+        )
+    )
+    education: list[EducationEntry] = Field(
+        description="Every education entry, most recent first. Empty if none appear."
+    )
+    experience: list[ExperienceEntry] = Field(
+        description=(
+            "Jobs, internships and substantial positions of responsibility, "
+            "most recent first. Leave out course projects, which belong to "
+            "the resume text rather than to a work history. Empty if none."
+        )
+    )
+    skills: list[str] = Field(
+        description=(
+            "Tools, languages and technologies the resume names, as it names "
+            "them. Up to 20. These are for orientation only and are never "
+            "matched against the rubric: that is screening's job, and it "
+            "reads the resume text directly."
+        )
+    )
+    links: list[str] = Field(
+        description=(
+            "URLs the resume gives, for example a GitHub or portfolio. Copy "
+            "them exactly. Empty when the resume has none or gives only "
+            "unlinked labels."
+        )
+    )
+
+
+# ---------------------------------------------------------------------
+# HR accounts. database/002_accounts.sql
+# ---------------------------------------------------------------------
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    name: str
+    password: str
+    company: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class HRAccount(BaseModel):
+    """The signed-in account as the frontend sees it.
+
+    Carries no password hash, no salt and no session token. The token is
+    returned once by SessionResponse at sign in and never again, so a
+    component that re-reads the account cannot accidentally re-expose it.
+    """
+
+    id: str
+    email: str
+    name: str
+    company: str | None = None
+
+
+class SessionResponse(BaseModel):
+    """The one response that carries the bearer token."""
+
+    token: str
+    expires_at: str
+    account: HRAccount
+    # How many pre-existing ownerless jobs this account just claimed. Only
+    # ever non-zero for the first account, and shown once so the claim is
+    # visible rather than silent.
+    claimed_jobs: int = 0
+
+
+# ---------------------------------------------------------------------
 # API shapes for the jobs routes. backend.md section 4
 # ---------------------------------------------------------------------
 
@@ -426,6 +614,110 @@ class JobCreate(BaseModel):
     description: str
     skills: list[str] = []
     experience: str | None = None
+    # Real columns since database/002_accounts.sql. These used to be
+    # appended to the description string by the frontend, which meant they
+    # could never be read back out or shown to a candidate as fields.
+    department: str | None = None
+    location: str | None = None
+    workplace_type: str | None = None
+    employment_type: str | None = None
+    compensation: str | None = None
+
+
+class JobFacts(BaseModel):
+    """Structured facts pulled out of an uploaded job description.
+
+    Every field except `skills` and `description` is optional, and the
+    prompt is told to return null rather than guess. A job description
+    that does not state a salary must not produce an invented one: HR is
+    about to publish this to candidates, and a fabricated compensation
+    range is worse than an empty field they fill in themselves.
+
+    Field order is generation order (see the module docstring), so the
+    description body is produced last, after the facts it has to have
+    removed from it.
+    """
+
+    title: str | None = Field(
+        default=None,
+        description=(
+            "The role title exactly as the document states it, for example "
+            "'Junior Business Analyst'. Null if the document never names the "
+            "role."
+        )
+    )
+    department: str | None = Field(
+        default=None,
+        description="Team or department, if stated. Null otherwise.",
+    )
+    location: str | None = Field(
+        default=None,
+        description=(
+            "Work location as written, for example 'Hyderabad' or "
+            "'Bangalore, India'. Null if the document does not say."
+        )
+    )
+    workplace_type: Literal["remote", "hybrid", "onsite"] | None = Field(
+        default=None,
+        description=(
+            "Only when the document actually says so. A named office "
+            "location alone is not enough to conclude onsite: many onsite "
+            "roles are hybrid and the document simply has not said. Null "
+            "when it is not stated."
+        )
+    )
+    employment_type: Literal["full_time", "part_time", "contract", "internship"] | None = Field(
+        default=None,
+        description=(
+            "Only when stated or unambiguous from the title, for example a "
+            "title containing 'Intern' means internship. Null otherwise."
+        )
+    )
+    compensation: str | None = Field(
+        default=None,
+        description=(
+            "The pay as written, for example '18 to 24 LPA' or '$120k to "
+            "$150k'. Null when the document does not state pay. Never "
+            "estimate a range from the seniority or the location."
+        )
+    )
+    skills: list[str] = Field(
+        description=(
+            "Concrete skills, tools and technologies the document asks for, "
+            "each as it would appear on a resume: 'SQL', 'Power BI', "
+            "'Python'. Between 3 and 10. Leave out soft qualities like "
+            "'team player', which the rubric handles separately."
+        )
+    )
+    experience: str | None = Field(
+        default=None,
+        description=(
+            "The experience requirement as a short phrase, for example "
+            "'0 to 2 years' or 'Final year student'. Null if unstated."
+        )
+    )
+    description: str = Field(
+        description=(
+            "The body of the posting: what the role does, the "
+            "responsibilities, and what the team is looking for. Keep the "
+            "document's own wording. Leave out the facts already captured "
+            "in the fields above, and leave out boilerplate about how to "
+            "apply or equal-opportunity statements."
+        )
+    )
+
+
+class JobDescriptionDocument(BaseModel):
+    """Extracted source text for HR to review before posting a role.
+
+    `facts` is null when parsing failed. The raw text is still returned in
+    that case so the upload remains useful: HR pastes it into the
+    description and fills the rest in by hand, which is exactly the
+    behavior that existed before parsing was added.
+    """
+
+    text: str
+    facts: JobFacts | None = None
 
 
 class JobSummary(BaseModel):
@@ -452,18 +744,33 @@ class JobDetail(BaseModel):
     state: str
     created_at: str
     rubric: Rubric | None
+    department: str | None = None
+    location: str | None = None
+    workplace_type: str | None = None
+    employment_type: str | None = None
+    compensation: str | None = None
     applicant_count: int = 0
     shortlisted_count: int = 0
     interviewed_count: int = 0
 
 
 class PublicJobSummary(BaseModel):
-    """What an unauthenticated candidate sees on the apply page. Title
-    only - never the rubric, which would tell them exactly what to say."""
+    """A public role view. It intentionally excludes the scoring rubric."""
 
     id: str
     title: str
     state: str
+    description: str
+    skills: list[str]
+    experience: str | None
+    created_at: str
+    # Shown on the opportunity page. These are the questions a candidate
+    # asks before deciding whether to record a two minute introduction.
+    department: str | None = None
+    location: str | None = None
+    workplace_type: str | None = None
+    employment_type: str | None = None
+    compensation: str | None = None
 
 
 class CandidateCreated(BaseModel):
@@ -508,6 +815,11 @@ class CandidateSummary(BaseModel):
     skills_total: int
     state: str
     created_at: str
+    # The interview, when there is one. Job Detail leads with candidates who
+    # have been interviewed, and it cannot rank them without their score.
+    interview_status: str | None = None
+    interview_score: int | None = None
+    interview_band: str | None = None
 
 
 class CandidateDetail(BaseModel):

@@ -78,6 +78,10 @@ def wired(monkeypatch):
         )
 
     monkeypatch.setattr(apply_api, "extract_resume", fake_extract_resume)
+    # Display-only structuring, and a real model call if left unpatched.
+    # It is not what these tests are about, and it must never affect the
+    # outcome of an application either way.
+    monkeypatch.setattr(apply_api, "try_build_resume_profile", lambda text: None)
     monkeypatch.setattr(apply_api, "transcribe", fake_transcribe)
     monkeypatch.setattr(apply_api, "screen_candidate", fake_screen_candidate)
     monkeypatch.setattr(apply_api.storage, "upload", lambda *a, **k: "path/1.pdf")

@@ -327,3 +327,60 @@ def test_rate_limit_is_not_transient_retried(monkeypatch):
         generate_structured("sys", "user", Reply)
     # Each key tried exactly once, not retried with backoff.
     assert per_key == {0: 1, 1: 1}
+
+
+def test_read_timeout_is_retried_then_reported_as_a_timeout(monkeypatch):
+    """A slow provider must not look like a schema failure.
+
+    Observed live during the consistency harness: the fourth of five
+    identical calls timed out and propagated as a bare 500. A timeout is
+    the same category as a 5xx - the request was fine, the provider did
+    not answer - so it retries, and if it keeps timing out the caller gets
+    a timeout, not "unexpected response".
+    """
+    import httpx
+
+    from app.core.errors import ProviderTimeout
+    from app.integrations import llm
+    from app.models import Rubric
+
+    calls = {"n": 0}
+
+    def always_times_out(*args, **kwargs):
+        calls["n"] += 1
+        raise httpx.ReadTimeout("the read operation timed out")
+
+    monkeypatch.setattr(llm, "_call", always_times_out)
+    monkeypatch.setattr(llm.time, "sleep", lambda _s: None)
+
+    with pytest.raises(ProviderTimeout) as caught:
+        llm.generate_structured("sys", "usr", Rubric)
+
+    assert calls["n"] == llm.LLM_TRANSIENT_RETRIES + 1
+    assert "did not respond in time" in str(caught.value)
+
+
+def test_a_timeout_that_clears_on_retry_succeeds(monkeypatch):
+    """The point of retrying: one slow call must not discard real work."""
+    import httpx
+
+    from app.integrations import llm
+    from app.models import Rubric
+    from tests.fixtures.rubrics import valid_rubric
+
+    rubric = valid_rubric()
+    calls = {"n": 0}
+
+    def slow_once(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ReadTimeout("the read operation timed out")
+        return rubric
+
+    monkeypatch.setattr(llm, "_call", slow_once)
+    monkeypatch.setattr(llm.time, "sleep", lambda _s: None)
+
+    result = llm.generate_structured("sys", "usr", Rubric)
+
+    assert calls["n"] == 2
+    assert sum(c.points for c in result.criteria) == 100

@@ -17,7 +17,7 @@ from typing import Any
 from supabase import Client, create_client
 
 from app.core.config import get_settings
-from app.core.errors import AlreadyApplied, RubricError
+from app.core.errors import AlreadyApplied, EmailAlreadyRegistered, RubricError
 from app.models import Rubric
 
 logger = logging.getLogger("rubric.storage")
@@ -42,9 +42,88 @@ class StorageNotConfigured(RubricError):
 @lru_cache
 def get_client() -> Client:
     settings = get_settings()
+
+    # DEMO_MODE swaps the client, not the functions above it. Every query,
+    # filter, ordering rule and unique-constraint check in this module then
+    # runs for real against an in-memory store seeded from the recorded
+    # golden rows - see demo_supabase.py for why that seam was chosen.
+    if settings.demo_mode:
+        from app import cassettes
+        from app.integrations.demo_supabase import DemoClient
+
+        logger.warning("DEMO_MODE: using the in-memory store, not Supabase")
+        return DemoClient(cassettes.supabase_seed())  # type: ignore[return-value]
+
     if not settings.supabase_url or not settings.supabase_service_role_key:
         raise StorageNotConfigured()
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
+
+
+# ---------------------------------------------------------------------
+# HR accounts
+# ---------------------------------------------------------------------
+
+
+def create_hr_user(
+    email: str,
+    name: str,
+    company: str | None,
+    password_hash: str,
+    password_salt: str,
+) -> dict[str, Any]:
+    """Register an account, claiming any ownerless jobs if it is the first.
+
+    Goes through the `register_hr_user` Postgres function rather than a
+    plain insert, because the insert and the claim have to be one
+    transaction. See database/002_accounts.sql for why.
+    """
+    try:
+        response = get_client().rpc(
+            "register_hr_user",
+            {
+                "p_email": email,
+                "p_name": name,
+                "p_company": company,
+                "p_password_hash": password_hash,
+                "p_password_salt": password_salt,
+            },
+        ).execute()
+    except Exception as exc:
+        if _is_unique_violation(exc):
+            raise EmailAlreadyRegistered() from exc
+        raise
+    return response.data
+
+
+def get_hr_user_by_email(email: str) -> dict[str, Any] | None:
+    response = get_client().table("hr_users").select("*").eq("email", email).execute()
+    return response.data[0] if response.data else None
+
+
+def get_hr_user(hr_user_id: str) -> dict[str, Any] | None:
+    response = get_client().table("hr_users").select("*").eq("id", hr_user_id).execute()
+    return response.data[0] if response.data else None
+
+
+def create_session(token: str, hr_user_id: str, expires_at: str) -> dict[str, Any]:
+    response = (
+        get_client()
+        .table("hr_sessions")
+        .insert({"token": token, "hr_user_id": hr_user_id, "expires_at": expires_at})
+        .execute()
+    )
+    return response.data[0]
+
+
+def get_session(token: str) -> dict[str, Any] | None:
+    """The session row, or None. Expiry is checked by the caller so that an
+    expired session can be deleted rather than just ignored."""
+    response = get_client().table("hr_sessions").select("*").eq("token", token).execute()
+    return response.data[0] if response.data else None
+
+
+def delete_session(token: str) -> None:
+    get_client().table("hr_sessions").delete().eq("token", token).execute()
 
 
 # ---------------------------------------------------------------------
@@ -57,6 +136,8 @@ def create_job(
     description: str,
     skills: list[str],
     experience: str | None,
+    owner_id: str,
+    facts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Insert the job before generating its rubric.
 
@@ -74,6 +155,11 @@ def create_job(
                 "skills": skills,
                 "experience": experience,
                 "state": "analyzing",
+                "owner_id": owner_id,
+                # location, department, compensation, employment_type,
+                # workplace_type. Optional, and absent rather than null when
+                # not supplied so the column defaults still apply.
+                **(facts or {}),
             }
         )
         .execute()
@@ -98,15 +184,19 @@ def get_job(job_id: str) -> dict[str, Any] | None:
     return response.data[0] if response.data else None
 
 
-def list_jobs() -> list[dict[str, Any]]:
-    response = (
-        get_client()
-        .table("jobs")
-        .select("*")
-        .order("created_at", desc=True)
-        .execute()
-    )
-    return response.data or []
+def list_jobs(owner_id: str | None = None) -> list[dict[str, Any]]:
+    """Jobs newest first.
+
+    `owner_id` is required by every HR caller. It stays optional here only
+    for the candidate-facing public list, which needs every active job
+    regardless of who posted it, and for the recording harness. A caller
+    that forgets it on an HR path leaks other accounts' jobs, so the route
+    layer never calls this without one.
+    """
+    query = get_client().table("jobs").select("*")
+    if owner_id is not None:
+        query = query.eq("owner_id", owner_id)
+    return query.order("created_at", desc=True).execute().data or []
 
 
 def delete_job(job_id: str) -> None:
@@ -126,6 +216,7 @@ def create_candidate(
     resume_text: str | None,
     audio_path: str | None,
     transcript: str | None,
+    resume_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Insert the applicant before screening runs.
 
@@ -145,6 +236,7 @@ def create_candidate(
                     "resume_path": resume_path,
                     "resume_text": resume_text,
                     "audio_path": audio_path,
+                    "resume_profile": resume_profile,
                     "transcript": transcript,
                     "state": "screening",
                 }
@@ -159,7 +251,11 @@ def create_candidate(
 
 
 def _is_unique_violation(exc: Exception) -> bool:
-    """Detect the (job_id, email) unique constraint.
+    """Detect a unique-constraint violation.
+
+    Used by the (job_id, email) constraint on candidates and by the email
+    constraint on hr_users, which is why the code is matched rather than
+    only the candidates constraint name.
 
     supabase-py surfaces PostgREST errors as a generic exception, so the
     Postgres error code is matched in the message. 23505 is
@@ -203,6 +299,18 @@ def save_screening(
     return response.data[0]
 
 
+def save_resume_profile(candidate_id: str, profile: dict[str, Any]) -> dict[str, Any]:
+    """Store a structured resume profile. Display only, never a score."""
+    response = (
+        get_client()
+        .table("candidates")
+        .update({"resume_profile": profile})
+        .eq("id", candidate_id)
+        .execute()
+    )
+    return response.data[0]
+
+
 def mark_screening_failed(candidate_id: str) -> None:
     """Roll the candidate back to `applied` so HR sees a retryable state
     rather than one stuck mid-screening forever."""
@@ -232,6 +340,104 @@ def list_candidates(job_id: str) -> list[dict[str, Any]]:
     return response.data or []
 
 
+def interview_summaries(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Interview status and overall score, keyed by candidate id.
+
+    Two extra queries rather than a PostgREST embedded select. The demo
+    store implements only `eq` and `in_` filters and no embeds, so an
+    embedded query would work against Supabase and fail in DEMO_MODE, which
+    is exactly the drift the demo store exists to prevent. At demo scale
+    two round trips cost nothing.
+    """
+    if not candidate_ids:
+        return {}
+
+    interviews = (
+        get_client()
+        .table("interviews")
+        .select("*")
+        .in_("candidate_id", candidate_ids)
+        .execute()
+        .data
+        or []
+    )
+    if not interviews:
+        return {}
+
+    results = (
+        get_client()
+        .table("interview_results")
+        .select("*")
+        .in_("interview_id", [i["id"] for i in interviews])
+        .execute()
+        .data
+        or []
+    )
+    by_interview = {r["interview_id"]: r for r in results}
+
+    summaries: dict[str, dict[str, Any]] = {}
+    for interview in interviews:
+        result = by_interview.get(interview["id"]) or {}
+        summaries[interview["candidate_id"]] = {
+            "status": interview.get("status"),
+            "overall_score": result.get("overall_score"),
+            "band": result.get("band"),
+        }
+    return summaries
+
+
+def list_candidates_by_email(email: str) -> list[dict[str, Any]]:
+    """Every application from one email address, newest first.
+
+    Used only by the candidate portal, which looks a person up by the
+    address they applied with. Returns whole rows, so the caller is
+    responsible for exposing only what a candidate may see: the row carries
+    scores and the assessment.
+    """
+    response = (
+        get_client()
+        .table("candidates")
+        .select("*")
+        .eq("email", email)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return response.data or []
+
+
+def list_all_candidates() -> list[dict[str, Any]]:
+    """Every candidate, newest first.
+
+    Only used by the candidate portal's demo fallback. Not owner scoped,
+    which is exactly why it has no other caller.
+    """
+    response = (
+        get_client()
+        .table("candidates")
+        .select("*")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return response.data or []
+
+
+def mark_interview_invited(interview_id: str) -> dict[str, Any]:
+    """Record that HR sent the interview link.
+
+    Distinct from the interview's created_at, which is when the token was
+    minted. Approving and sending are separate acts, and the candidate
+    portal only surfaces a link that was actually sent.
+    """
+    response = (
+        get_client()
+        .table("interviews")
+        .update({"invited_at": "now()"})
+        .eq("id", interview_id)
+        .execute()
+    )
+    return response.data[0]
+
+
 def set_candidate_state(candidate_id: str, state: str) -> dict[str, Any]:
     response = (
         get_client()
@@ -256,6 +462,23 @@ def create_interview(candidate_id: str, token: str) -> dict[str, Any]:
         .execute()
     )
     return response.data[0]
+
+
+def approve_candidate_atomic(candidate_id: str, token: str) -> dict[str, Any]:
+    """Mint the interview token and move the candidate to approved, as one
+    transaction. Returns {"token", "state"}.
+
+    `token` is the token to use if none exists yet. When the candidate was
+    already approved the stored token is returned instead and the one
+    passed in is discarded, because HR may already have sent the earlier
+    link and replacing it would break a URL that is already in someone's
+    inbox. See database/002_accounts.sql.
+    """
+    response = get_client().rpc(
+        "approve_candidate_atomic",
+        {"p_candidate_id": candidate_id, "p_token": token},
+    ).execute()
+    return response.data
 
 
 def get_interview_by_token(token: str) -> dict[str, Any] | None:

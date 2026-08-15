@@ -1,4 +1,5 @@
 import { useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CandidateShell } from "../../components/layout";
 // Reuses the "done" screen's classes from the interview screen - both are
 // the same quiet, no-action confirmation layout (screens.md sections 6, 8).
@@ -32,7 +33,15 @@ export function ApplicationCompletePage() {
             ? `Thank you for applying to ${jobTitle}. The hiring team will be in touch if you are shortlisted.`
             : "Thank you for applying. The hiring team will be in touch if you are shortlisted."}
         </p>
-        <p className="text-body-lg rb-interview-done__body">You can close this window.</p>
+        {/* There is somewhere to go now. An invitation to interview appears
+            in the portal against the email they just applied with, so
+            saying "you can close this window" would send them away from the
+            one screen that will tell them. Still no score, ever. */}
+        <p className="text-body-lg rb-interview-done__body">
+          If they invite you to an interview, the link will appear under My
+          applications, against the email you applied with.
+        </p>
+        <Link to="/apply" className="rb-application-done__link">Browse open roles</Link>
       </div>
     </CandidateShell>
   );

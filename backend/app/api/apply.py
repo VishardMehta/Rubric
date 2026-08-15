@@ -25,6 +25,7 @@ from app.integrations import storage
 from app.integrations.resume import extract_resume
 from app.integrations.stt import transcribe
 from app.models import CandidateCreated, Rubric
+from app.services.resume_profile import try_build_resume_profile
 from app.services.scoring import band_for
 from app.services.screening import screen_candidate
 
@@ -95,6 +96,11 @@ def _apply(
     # upload fails fast without leaving a half written candidate row.
     yield STAGE_READING_RESUME
     resume_text = extract_resume(resume_bytes)
+    # Structured for display only, and never allowed to fail the
+    # application: a null profile degrades Candidate Detail to the raw
+    # text it has always shown. Runs under the same stage label because it
+    # is part of reading the resume from the candidate's point of view.
+    resume_profile = try_build_resume_profile(resume_text)
 
     yield STAGE_TRANSCRIBING
     extension = _audio_extension(audio_content_type, audio_filename)
@@ -123,6 +129,7 @@ def _apply(
         resume_text=resume_text,
         audio_path=audio_path,
         transcript=transcript,
+        resume_profile=resume_profile,
     )
 
     yield STAGE_SCORING

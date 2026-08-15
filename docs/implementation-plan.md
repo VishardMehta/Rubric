@@ -272,3 +272,71 @@ Send them before Phase 4 ends.
 
 **Prior art reviewed** for the backend is documented in `docs/prior-art.md`,
 including what was adopted and what was deliberately rejected.
+
+---
+
+## Phase 10 review record
+
+Recorded 14 Aug 2026, against the built product rather than the spec.
+
+### 10.5 Screen review checklist (design-system.md §23)
+
+All nine screens pass. Checked mechanically where mechanical checking was
+possible, by eye where it was not.
+
+| Item | Result |
+|---|---|
+| Purpose clear in two seconds | Pass |
+| Exactly one primary action | Pass |
+| Exactly one hero score, or none | Pass. `ScoreHero` appears once on Candidate Detail, once on Interview Result, zero times on the other seven |
+| All numbers tabular | Pass. Tabular is the global default in `base.css`; prose blocks opt out explicitly |
+| Prose constrained to 68ch | Pass. 13 rules across the CSS layer |
+| Semantic colour at most twice per viewport | Pass. Candidate row shows one tinted chip plus one coloured score |
+| Fully usable with all colour removed | Pass, verified by grayscale screenshot of Interview Result. Every band word is present in text beside its number |
+| Empty state written | Pass. Jobs Dashboard, Job Detail, and per-filter-tab |
+| Error state written | Pass on every screen that can fail |
+| Loading state names real backend work | Pass. Stage labels are streamed from the server, never advanced on a timer |
+| Keyboard navigable, focus visible | Pass. Table rows carry a real link; `:focus-visible` is global |
+| Works at 375px | Pass on eight. Interview Result verified at 760px only, see below |
+| No fabricated data | Pass. No hardcoded score or band literal exists outside the enum-to-tone map |
+
+**One gap.** Interview Result was verified at 760px, which is inside the
+compact breakpoint, but not at 375px: headless Chrome will not screenshot
+that page below roughly 1000px, and the cause is its seven remote audio
+elements under SwiftShader rather than anything in the layout. The compact
+rules are written and the identical pattern is verified on the other three
+HR screens. Worth one look on a real phone.
+
+### Deviations from spec, and why
+
+1. **Interview sub-scores are neutral ink.** screens.md §5 permits colouring
+   them at a band boundary, but the backend returns exactly one band, for
+   the overall score. Deriving three more in the browser is the one thing
+   design-system.md §3 and CLAUDE.md both forbid.
+2. **Evidence source tags use `ink-secondary`, not `ink-tertiary`.**
+   screens.md §4 asks for tertiary; §19 of the same document says tertiary
+   is not for meaningful text, and these tags are the load-bearing signal
+   separating a written claim from a spoken one.
+
+### Found and fixed during hardening
+
+- `GET /candidates/{id}` declared `interview_status` and `interview_token`
+  and never populated them, making the post-approval link and the interview
+  result link unreachable. Fixed, two regression tests.
+- A Gemini read timeout was not retried and surfaced as a bare 500. Caught
+  live: the fourth of five consistency-harness runs timed out. A timeout is
+  the same category as a 5xx, so it now retries and then reports
+  `provider_timeout`. On the final interview turn the old behaviour would
+  have discarded a completed interview.
+- The demo Supabase fake treated `NULL = NULL` in unique constraints.
+  Postgres does not, so two candidates with no email were wrongly rejected
+  as duplicates.
+
+### Measured
+
+- **Consistency harness: range 0 across five runs.** 75 every time, and every
+  one of the five criteria identical on every run. This is the property the
+  whole sub-score design exists to produce, and the one that decides whether
+  re-running a candidate during a demo is safe.
+- **DEMO_MODE offline: 12 tests pass with IP networking disabled**, including
+  the full demo flow driven over HTTP against the committed cassettes.

@@ -14,9 +14,11 @@ import logging
 import uuid
 from collections.abc import Iterator
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 
+from app.api.candidates import owned_candidate_or_404
+from app.core.auth import HRUser, require_hr
 from app.core.errors import (
     EvaluationFailed,
     InterviewAlreadyComplete,
@@ -358,17 +360,21 @@ def _evaluate(interview_id: str, rubric: Rubric, state: InterviewState) -> None:
 
 
 @router.get("/candidates/{candidate_id}/interview", response_model=InterviewResult)
-async def get_result(candidate_id: str) -> InterviewResult:
-    """HR-facing. The full result with every turn."""
-    candidate = storage.get_candidate(candidate_id)
-    if candidate is None:
-        raise InvalidToken("That candidate could not be found.")
+async def get_result(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> InterviewResult:
+    """HR-facing. The full result with every turn.
+
+    Owner scoped like the rest of the candidate routes. This one returns
+    the entire transcript plus signed URLs to every answer recording, so
+    leaving it open would undo the scoping on all the others.
+    """
+    candidate, job = owned_candidate_or_404(candidate_id, hr)
 
     interview = storage.get_interview_by_candidate(candidate_id)
     if interview is None:
         raise InvalidToken("This candidate has no interview.")
 
-    job = storage.get_job(candidate["job_id"])
     rubric = Rubric.model_validate(job["rubric"]) if job and job.get("rubric") else None
     result = storage.get_interview_result(interview["id"])
     turns = storage.list_turns(interview["id"])
@@ -410,15 +416,17 @@ async def get_result(candidate_id: str) -> InterviewResult:
 
 
 @router.post("/candidates/{candidate_id}/interview/evaluate", response_model=InterviewResult)
-async def retry_evaluation(candidate_id: str) -> InterviewResult:
+async def retry_evaluation(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> InterviewResult:
     """Retry an evaluation that failed after the candidate finished."""
-    candidate = storage.get_candidate(candidate_id)
-    interview = storage.get_interview_by_candidate(candidate_id) if candidate else None
-    if candidate is None or interview is None:
+    _candidate, job = owned_candidate_or_404(candidate_id, hr)
+
+    interview = storage.get_interview_by_candidate(candidate_id)
+    if interview is None:
         raise InvalidToken("That candidate has no interview.")
 
-    job = storage.get_job(candidate["job_id"])
-    if job is None or not job.get("rubric"):
+    if not job.get("rubric"):
         raise JobNotActive("That job no longer has a rubric to score against.")
 
     state = InterviewState(interview.get("state_object"))
@@ -428,4 +436,4 @@ async def retry_evaluation(candidate_id: str) -> InterviewResult:
         logger.exception("evaluation retry failed for interview %s", interview["id"])
         raise EvaluationFailed() from None
 
-    return await get_result(candidate_id)
+    return await get_result(candidate_id, hr)

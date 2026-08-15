@@ -13,6 +13,386 @@
   gap: var(--space-8);
 }
 
+.rb-candidate-portal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  max-width: 520px;
+  animation: rb-candidate-portal-in var(--duration-slow) var(--ease-entrance);
+}
+
+.rb-candidate-portal__eyebrow,
+.rb-candidate-portal__title,
+.rb-candidate-portal__body {
+  margin: 0;
+}
+
+.rb-candidate-portal__body {
+  max-width: 47ch;
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}
+
+.rb-candidate-portal .rb-field {
+  width: 100%;
+}
+
+.rb-opportunities {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  animation: rb-candidate-portal-in var(--duration-slow) var(--ease-entrance);
+}
+
+.rb-candidate-portal-shell {
+  min-height: 100vh;
+  background: var(--color-canvas);
+}
+
+.rb-candidate-topbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(220px, 1fr);
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 76px;
+  padding: 0 var(--layout-gutter-wide);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rb-candidate-topbar__brand {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: var(--space-3);
+  color: var(--color-accent);
+  font-size: var(--text-title-2-size);
+  font-weight: var(--text-title-2-weight);
+  letter-spacing: var(--text-title-2-letter-spacing);
+  text-decoration: none;
+}
+
+.rb-candidate-topbar__brand > img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.rb-candidate-topbar__nav {
+  display: flex;
+  align-self: stretch;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.rb-candidate-topbar__nav-item {
+  position: relative;
+  padding: 0 var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+}
+
+.rb-candidate-topbar__nav-item:hover { color: var(--color-ink); }
+
+.rb-candidate-topbar__nav-item--active { color: var(--color-accent); }
+
+.rb-candidate-topbar__nav-item--active::after {
+  position: absolute;
+  right: var(--space-4);
+  bottom: 0;
+  left: var(--space-4);
+  height: 2px;
+  background: var(--color-accent);
+  content: "";
+}
+
+.rb-candidate-topbar__search {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  width: min(100%, 312px);
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink-secondary);
+}
+
+.rb-candidate-topbar__search > span { font-size: 21px; line-height: 1; transform: translateY(-1px); }
+.rb-candidate-topbar__search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font-size: var(--text-body-size); }
+.rb-candidate-topbar__search input::placeholder { color: var(--color-ink-secondary); }
+
+.rb-candidate-portal-main {
+  width: min(100%, calc(1120px + var(--layout-gutter-wide) * 2));
+  margin: 0 auto;
+  padding: var(--space-16) var(--layout-gutter-wide) var(--space-20);
+}
+
+.rb-opportunities__header {
+  max-width: 620px;
+}
+
+.rb-opportunities__eyebrow,
+.rb-opportunities__title,
+.rb-opportunities__body {
+  margin: 0;
+}
+
+.rb-opportunities__title { margin-top: var(--space-2); font-size: clamp(var(--text-title-1-size), 4vw, 44px); }
+
+.rb-opportunities__body {
+  margin-top: var(--space-4);
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}
+
+.rb-opportunities__browse,
+.rb-opportunities__applications {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.rb-opportunities__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  align-items: end;
+  gap: var(--space-4);
+}
+
+.rb-opportunities__filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--color-ink);
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+}
+
+.rb-opportunities__filter select {
+  width: 100%;
+  height: 42px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.rb-opportunities__browse-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-opportunities__browse-head > p { margin: 0; }
+
+.rb-opportunities__section-label,
+.rb-opportunities__section-title {
+  margin: 0;
+}
+
+.rb-opportunities__section-title { margin-top: var(--space-1); }
+
+.rb-opportunities__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rb-opportunity-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.rb-opportunity-card:hover { border-color: var(--color-accent-ring); transform: translateY(-1px); }
+
+.rb-opportunity-card__main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rb-opportunity-card__title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-opportunity-card h3,
+.rb-opportunity-card p { margin: 0; }
+
+.rb-opportunity-card h3 {
+  font-size: var(--text-title-2-size);
+  font-weight: var(--text-title-2-weight);
+  letter-spacing: var(--text-title-2-letter-spacing);
+}
+
+.rb-opportunity-card p {
+  max-width: 68ch;
+  color: var(--color-ink-secondary);
+  font-variant-numeric: normal;
+}
+
+.rb-opportunity-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+}
+
+.rb-opportunity-card__meta > span { margin-right: var(--space-2); }
+
+.rb-opportunity-card__action,
+.rb-opportunity-detail__back,
+.rb-application-done__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rb-opportunity-card__action:hover,
+.rb-opportunity-detail__back:hover,
+.rb-application-done__link:hover { background: var(--color-accent-tint); text-decoration: none; }
+
+.rb-opportunities__applications {
+  padding: var(--space-8);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+}
+
+.rb-opportunities__application-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-hairline);
+}
+
+@media (max-width: 767px) {
+  .rb-candidate-topbar {
+    grid-template-columns: 1fr auto;
+    gap: var(--space-3);
+    min-height: auto;
+    padding: var(--space-3) var(--layout-gutter-compact);
+  }
+  .rb-candidate-topbar__brand { font-size: var(--text-title-3-size); }
+  .rb-candidate-topbar__nav { grid-column: 1 / -1; grid-row: 2; overflow-x: auto; }
+  .rb-candidate-topbar__nav-item { min-height: 38px; padding: 0 var(--space-3); white-space: nowrap; }
+  .rb-candidate-topbar__nav-item--active::after { right: var(--space-3); left: var(--space-3); }
+  .rb-candidate-topbar__search { width: min(100%, 180px); padding: 0 var(--space-2); border-radius: var(--radius-sm); }
+  .rb-candidate-portal-main { padding: var(--space-10) var(--layout-gutter-compact) var(--space-16); }
+  .rb-opportunities { gap: var(--space-8); }
+  .rb-opportunities__controls { grid-template-columns: 1fr; }
+  .rb-opportunity-card { grid-template-columns: 1fr; align-items: start; gap: var(--space-4); padding: var(--space-5); }
+  .rb-opportunity-card__title-row { align-items: flex-start; flex-direction: column; gap: var(--space-1); }
+  .rb-opportunity-card__action { justify-self: start; }
+  .rb-opportunities__applications { padding: var(--space-5); }
+}
+
+.rb-opportunities__application-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rb-opportunities__application-list li > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rb-opportunities__application-list strong { font-weight: var(--text-body-strong-weight); }
+.rb-opportunities__application-list small { color: var(--color-ink-secondary); font-size: var(--text-caption-size); }
+
+.rb-opportunity-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  max-width: 680px;
+  animation: rb-candidate-portal-in var(--duration-slow) var(--ease-entrance);
+}
+
+.rb-opportunity-detail__header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.rb-opportunity-detail__header p,
+.rb-opportunity-detail__header h1 { margin: 0; }
+.rb-opportunity-detail__header > p:last-of-type { color: var(--color-ink-secondary); }
+
+.rb-opportunity-detail__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.rb-opportunity-detail__section .text-label { margin: 0; }
+
+.rb-opportunity-detail__description {
+  margin: 0;
+  white-space: pre-wrap;
+  font-variant-numeric: normal;
+}
+
+.rb-opportunity-detail__skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@keyframes rb-candidate-portal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .rb-apply__header {
   text-align: center;
 }
@@ -29,6 +409,16 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+}
+
+.rb-apply__section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rb-apply__section-label {
+  margin: 0 0 var(--space-1);
 }
 
 .rb-apply__resume,
@@ -66,6 +456,12 @@
   gap: var(--space-3);
 }
 
+.rb-apply__submit-note {
+  margin: 0;
+  max-width: 44ch;
+  text-align: right;
+}
+
 .rb-apply__submit-error {
   margin: 0;
   align-self: stretch;
@@ -83,6 +479,12 @@
  */
 
 @media (max-width: 639px) {
+  .rb-opportunities { gap: var(--space-8); }
+  .rb-opportunities__browse-head,
+  .rb-opportunity-card,
+  .rb-opportunity-card__title-row { align-items: flex-start; flex-direction: column; }
+  .rb-opportunity-card { display: flex; gap: var(--space-4); }
+
   .rb-apply__submit {
     align-items: stretch;
   }
@@ -91,7 +493,130 @@
     text-align: left;
   }
 
+  .rb-apply__submit-note {
+    text-align: left;
+  }
+
   .rb-apply__submit .rb-button {
     width: 100%;
   }
+}
+
+/* Practical role facts, above the description on the opportunity page.
+   Location, pay and employment type decide whether a candidate spends
+   fifteen minutes applying, so they are answered before the prose. */
+.rb-opportunity-detail__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.rb-opportunity-detail__facts dt {
+  margin-bottom: var(--space-1);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-label-size);
+  font-weight: var(--text-label-weight);
+  letter-spacing: var(--text-label-letter-spacing);
+  text-transform: uppercase;
+}
+
+.rb-opportunity-detail__facts dd {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--text-body-size);
+}
+
+/* --- Candidate applications ----------------------------------------------
+ * Server backed since Phase D. Looked up by the email the person applied
+ * with: there are no candidate accounts, because a password would need a
+ * reset flow and reset needs email delivery, which is out of scope.
+ */
+
+.rb-applications__lookup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-4);
+  max-width: 560px;
+}
+
+.rb-applications__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rb-applications__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+}
+
+.rb-applications__main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rb-applications__main strong {
+  color: var(--color-ink);
+  font-size: var(--text-body-strong-size);
+}
+
+.rb-applications__main small {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+}
+
+.rb-applications__detail {
+  margin: var(--space-2) 0 0;
+  max-width: 60ch;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+}
+
+.rb-applications__aside {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.rb-applications__cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rb-applications__cta:hover {
+  background: var(--color-accent-hover, var(--color-accent));
+  text-decoration: none;
+}
+
+@media (max-width: 767px) {
+  .rb-applications__lookup { grid-template-columns: 1fr; }
+  .rb-applications__row { flex-direction: column; gap: var(--space-4); }
+  .rb-applications__aside { flex-direction: row; align-items: center; }
 }

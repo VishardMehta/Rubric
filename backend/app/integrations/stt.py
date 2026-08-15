@@ -14,6 +14,7 @@ import logging
 import groq
 from faster_whisper import WhisperModel
 
+from app import cassettes
 from app.core.config import get_settings
 from app.core.errors import AudioTooLarge, AudioUnreadable, TranscriptionFailed
 from app.core.heuristics import AUDIO_MAX_BYTES, STT_TIMEOUT_SECONDS
@@ -70,11 +71,21 @@ def transcribe(audio: bytes, filename: str) -> str:
     if len(audio) == 0:
         raise AudioUnreadable("The recording was empty. Try recording again.")
 
+    # Size and emptiness are checked before the cassette lookup so those
+    # two errors behave identically in DEMO_MODE. They are properties of
+    # the file, not of the provider, and a demo should still reject a
+    # 30MB upload the way the live system does.
+    if cassettes.demo_mode():
+        return cassettes.stt_replay(audio)
+
     settings = get_settings()
 
     if settings.groq_api_key:
         try:
-            return _transcribe_with_groq(audio, filename)
+            transcript = _transcribe_with_groq(audio, filename)
+            if cassettes.recording():
+                cassettes.stt_record(audio, transcript)
+            return transcript
         except groq.BadRequestError as exc:
             raise AudioUnreadable() from exc
         except groq.AuthenticationError as exc:
@@ -95,7 +106,10 @@ def transcribe(audio: bytes, filename: str) -> str:
         logger.info("no GROQ_API_KEY configured, using local transcription")
 
     try:
-        return _transcribe_locally(audio, filename)
+        transcript = _transcribe_locally(audio, filename)
+        if cassettes.recording():
+            cassettes.stt_record(audio, transcript)
+        return transcript
     except Exception as exc:
         logger.exception("local transcription failed")
         raise TranscriptionFailed() from exc

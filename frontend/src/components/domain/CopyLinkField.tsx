@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { Button } from "../primitives";
-import { useToast } from "../feedback";
+import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import "./domain.css";
 
 interface CopyLinkFieldProps {
@@ -20,25 +19,12 @@ interface CopyLinkFieldProps {
  * email to a candidate, and a truncated link that cannot be verified by
  * eye before sending is worse than a long one.
  *
- * `navigator.clipboard` needs a secure context. localhost counts as one,
- * so it works for the demo, but the fallback still matters because the
- * API also rejects a call made without a user gesture in some browsers.
+ * Where the link does not need to be read, only handed over, use a plain
+ * Button with `useCopyToClipboard` instead - that is what the Job Detail
+ * header does.
  */
 export function CopyLinkField({ url, toastMessage, help }: CopyLinkFieldProps) {
-  const toast = useToast();
-  const [failed, setFailed] = useState(false);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setFailed(false);
-      toast.show(toastMessage);
-    } catch {
-      // Selecting the text is the recovery: the link is already on screen
-      // in full, so the candidate's link is never actually unreachable.
-      setFailed(true);
-    }
-  }
+  const { copy, failed } = useCopyToClipboard();
 
   return (
     <div className="rb-copylink">
@@ -50,11 +36,13 @@ export function CopyLinkField({ url, toastMessage, help }: CopyLinkFieldProps) {
           onFocus={(event) => event.currentTarget.select()}
           aria-label="Link"
         />
-        <Button onClick={handleCopy}>Copy</Button>
+        <Button onClick={() => void copy(url, toastMessage)}>Copy</Button>
       </div>
       {(help || failed) && (
         <p className={`rb-copylink__help${failed ? " rb-copylink__help--failed" : ""}`}>
-          {failed ? "Your browser blocked the copy. Select the link above and copy it." : help}
+          {failed
+            ? "Your browser blocked the copy. Select the link above and copy it."
+            : help}
         </p>
       )}
     </div>

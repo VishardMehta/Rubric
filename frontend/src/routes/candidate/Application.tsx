@@ -8,6 +8,7 @@ import type { AudioRecording } from "../../hooks/useAudioRecorder";
 import { api, ApiError, submitApplicationStreaming } from "../../api/client";
 import type { ApplicationStage, PublicJobSummary } from "../../api/client";
 import "./application.css";
+import { rememberEmail } from "../../lib/candidate-applications";
 
 /*
  * screens.md section 6. A stranger's first contact with the product.
@@ -121,6 +122,10 @@ export function ApplicationPage() {
           { name: name.trim(), email: email.trim(), resume: resumeFile, audio: recording.blob },
           (stage) => setStageLabel(STAGE_LABELS[stage]),
         );
+        // The portal looks applications up by this address, so remembering
+        // it is what lets a returning candidate see their status without
+        // typing it again. It is a convenience, not a credential.
+        rememberEmail(email.trim());
         navigate(`/apply/${jobId}/done`, { replace: true, state: { jobTitle: created.job_title } });
       } catch (cause) {
         if (cause instanceof ApiError && RESUME_ERROR_CODES.has(cause.code)) {
@@ -175,6 +180,7 @@ export function ApplicationPage() {
         <Divider />
 
         <div className="rb-apply__fields">
+          <p className="text-label rb-apply__section-label">01 · Your details</p>
           <TextField
             label="Your name"
             autoComplete="name"
@@ -199,7 +205,10 @@ export function ApplicationPage() {
         <Divider />
 
         <div className="rb-apply__resume">
-          <span className="rb-apply__label">Resume</span>
+          <div className="rb-apply__section-head">
+            <p className="text-label rb-apply__section-label">02 · Your resume</p>
+            <span className="rb-apply__label">Resume</span>
+          </div>
           <FileDropzone
             value={resumeFile}
             onChange={handleResumeChange}
@@ -211,7 +220,10 @@ export function ApplicationPage() {
         <Divider />
 
         <div className="rb-apply__voice">
-          <h2 className="text-title-3 rb-apply__label">Voice introduction</h2>
+          <div className="rb-apply__section-head">
+            <p className="text-label rb-apply__section-label">03 · Your introduction</p>
+            <h2 className="text-title-3 rb-apply__label">Voice introduction</h2>
+          </div>
           <p className="text-body-lg rb-apply__voice-copy">
             Tell us who you are, what you have worked on, and what you built.
             About two minutes is plenty. Your resume covers where you worked;
@@ -221,6 +233,9 @@ export function ApplicationPage() {
         </div>
 
         <div className="rb-apply__submit">
+          <p className="text-caption rb-apply__submit-note">
+            Your application is sent only when every item above is complete.
+          </p>
           {submitError && (
             <p className="rb-apply__submit-error" role="alert">
               {submitError}

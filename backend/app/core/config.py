@@ -31,6 +31,23 @@ class Settings(BaseSettings):
 
     demo_mode: bool = False
 
+    # Demo convenience: any email and any password signs in, and the
+    # account is created on the spot if it does not exist. The candidate
+    # portal also stops filtering by email when the address it is given has
+    # no applications.
+    #
+    # Off by default and deliberately separate from demo_mode, which swaps
+    # the database for an in-memory store. This one is about walking a
+    # client through the product against real Supabase data without
+    # stopping to remember a password.
+    #
+    # It is a real authentication bypass. It is safe here only because this
+    # project is localhost only with no deployment (CLAUDE.md) and the
+    # deliverable is an academic demo, not a system that screens real
+    # people (PROJECT.md). Anything that changes either of those facts has
+    # to turn this off first.
+    demo_auth: bool = False
+
     # Pinned here, not inline at call sites, per backend.md section 2.
     #
     # gemini-3.1-flash-lite chosen for free-tier RPM/RPD headroom rather

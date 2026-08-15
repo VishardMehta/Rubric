@@ -34,7 +34,20 @@ need to be reinterpreted from the client's original documents.
 
 The MVP flow, entity states and route map are in `docs/product.md` §3 to §5.
 Out-of-scope modules are listed in §7 of that document: proctoring, anti-cheat,
-GitHub and LinkedIn verification, PDF reports, email delivery, HR auth.
+GitHub and LinkedIn verification, PDF reports, email delivery.
+
+### Scope change: HR accounts, requested after the MVP shipped
+
+HR authentication and multi-user were fenced out of the original estimate and
+appear as out-of-scope in `docs/product.md` §7, `README.md` and the fee basis
+below. The client asked for them afterwards, so they were built and §7 was
+updated to match. This is a real addition to the agreed scope, not a
+clarification of it, and the fixed fee below was set without it. Flagged here
+so the difference is on the record rather than absorbed silently.
+
+Added with it: job ownership, so each account sees only its own roles and
+applicants. Not added, and still out of scope for the same reason as before:
+email delivery, and therefore password reset and HR invitations.
 
 Nine screens: one landing, five HR, three candidate. Specified in
 `docs/screens.md`.
@@ -106,13 +119,63 @@ conventional work against patterns already established.
 
 ## Demo checklist
 
-Run before any client demo.
+Run before any client demo. The first four are the ones that have actually
+gone wrong.
 
-- [ ] Supabase project un-paused
-- [ ] `DEMO_MODE=1` verified working with the network disconnected
-- [ ] Golden job and candidate present
-- [ ] Microphone permission already granted in the demo browser profile
-- [ ] Demo on a 5-criterion job so the interview is 6 questions
+**The day before**
+
+- [ ] Supabase project un-paused. Free projects pause after about seven days
+      idle and a paused project looks exactly like a broken application
+- [ ] Cassettes current: re-record if any prompt changed since they were made.
+      `cd backend && .venv/bin/python -m tests.record_cassettes`
+- [ ] Offline replay proven:
+      `.venv/bin/python -m pytest tests/test_demo_mode.py -q`
+      This blocks IP networking inside the process and replays the whole flow
+      from `tests/cassettes/`. If it passes, a laptop in aeroplane mode with
+      no API keys can still run the demo
+- [ ] Both suites green: `pytest -q` in `backend/`, `npm run build` in
+      `frontend/`
+
+**On the machine, an hour before**
+
+- [ ] Backend on the port the frontend expects:
+      `DEMO_MODE=1 .venv/bin/uvicorn app.main:app --port 8123`
+- [ ] Log line `DEMO_MODE: using the in-memory store, not Supabase` present.
+      Without it you are live against the providers and one 429 from ending
+      the demo
+- [ ] `DEMO_AUTH=1` if you want to sign in without remembering a password.
+      The sign in screen says so on the page when it is on, and the backend
+      logs it on boot. Turn it off before anything that is not a demo
+- [ ] Register the demo HR account. `DEMO_MODE` starts from an in-memory
+      store that resets on every restart, so the account has to be created
+      again after each one. It claims the seeded job on registration, so a
+      dashboard that looks empty means you skipped this
+- [ ] `http://localhost:5273/jobs` shows the golden job with its candidate
+- [ ] Microphone permission already granted in the demo browser profile, so
+      the first question does not open a permission prompt
+- [ ] Speech synthesis audible: system volume up, output device correct
+
+**Know before you are asked**
+
+- [ ] Re-running the same candidate gives the same score. That is the point of
+      the sub-score discipline, and the consistency harness measures it:
+      `.venv/bin/python -m tests.consistency_harness`
+- [ ] The interview adapts. Show the transcript on Interview Result: each turn
+      names the rubric criteria it probed, and the follow-ups quote the
+      candidate
+- [ ] Candidates never see a score, at any point, including on completion
+
+**Known limits, say them before the client finds them**
+
+- [ ] Registration is open and there is no password reset. Both need email
+      delivery, which is out of scope. Say it before someone clicks around
+      looking for "forgot password"
+- [ ] The session token lives in `localStorage`, not an httpOnly cookie. Fine
+      for localhost, would not be for a deployed build
+- [ ] In `DEMO_MODE` a *new* recording cannot be transcribed: only the golden
+      audio is in the cassettes. Live-recording a fresh answer needs
+      `DEMO_MODE` off, which means live API calls and a rate-limit risk
+- [ ] Rubric regeneration does not rescore candidates already screened
 
 ## Source documents
 

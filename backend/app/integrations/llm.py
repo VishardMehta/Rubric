@@ -22,13 +22,15 @@ from collections.abc import Callable
 from functools import lru_cache
 from typing import TypeVar
 
+import httpx
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types as genai_types
 from pydantic import BaseModel, ValidationError
 
+from app import cassettes
 from app.core.config import get_settings
-from app.core.errors import RateLimited, SchemaValidationFailed
+from app.core.errors import ProviderTimeout, RateLimited, SchemaValidationFailed
 from app.core.heuristics import (
     LLM_REQUEST_TIMEOUT_SECONDS,
     LLM_SEED,
@@ -80,6 +82,17 @@ def _call(
     response_model: type[T],
     key_index: int = 0,
 ) -> T:
+    # The cassette seam sits here, at the innermost real network call, so
+    # everything above it still runs on replay: the caller's validator, the
+    # retry-with-violation path, the schema parse. A recorded response that
+    # would fail validation fails in DEMO_MODE too, rather than being
+    # waved through because it came from a file (app/cassettes.py).
+    if cassettes.demo_mode():
+        payload = cassettes.gemini_replay(
+            system_instruction, user_content, response_model.__name__
+        )
+        return response_model.model_validate(payload)
+
     settings = get_settings()
     client = _get_client(key_index)
 
@@ -101,7 +114,15 @@ def _call(
     )
 
     if response.parsed is not None:
-        return response.parsed  # type: ignore[return-value]
+        parsed: T = response.parsed  # type: ignore[assignment]
+        if cassettes.recording():
+            cassettes.gemini_record(
+                system_instruction,
+                user_content,
+                response_model.__name__,
+                parsed.model_dump(mode="json"),
+            )
+        return parsed
 
     # The SDK could not auto-parse (rare, but possible on a truncated or
     # malformed response). Validate the raw text ourselves so a near miss
@@ -160,22 +181,33 @@ def _call_with_transient_retry(
     as terminal throws away real work: observed live, a 503 on the last
     interview turn discarded a completed interview. Rate limits are not
     retried here - those rotate to the other key instead.
+
+    A read timeout is the same category and is retried the same way. The
+    request was accepted and the provider simply did not answer inside
+    LLM_REQUEST_TIMEOUT_SECONDS, which on a free tier happens under load.
+    Observed live while running the consistency harness: the fourth of five
+    identical calls timed out. Left unhandled it surfaces as a bare 500,
+    and on the last interview turn it would discard a finished interview
+    for exactly the reason the 503 case above exists to prevent.
     """
     for attempt in range(LLM_TRANSIENT_RETRIES + 1):
         try:
             return _call(system_instruction, user_content, response_model, key_index)
-        except genai_errors.ServerError as exc:
+        except (genai_errors.ServerError, httpx.TimeoutException) as exc:
             if attempt == LLM_TRANSIENT_RETRIES:
                 logger.error(
-                    "gemini unavailable after %d attempts: %s",
+                    "gemini unavailable after %d attempts: %r",
                     LLM_TRANSIENT_RETRIES + 1,
                     exc,
                 )
+                # A timeout is not a schema problem, so it must not be
+                # reported as one. The caller gets a retryable error whose
+                # message says the provider did not respond in time.
+                if isinstance(exc, httpx.TimeoutException):
+                    raise ProviderTimeout() from exc
                 raise
             wait = LLM_TRANSIENT_BACKOFF_SECONDS * (attempt + 1)
-            logger.warning(
-                "gemini server error (%s), retrying in %.1fs", exc.code, wait
-            )
+            logger.warning("gemini call failed (%r), retrying in %.1fs", exc, wait)
             time.sleep(wait)
     raise SchemaValidationFailed()
 

@@ -54,43 +54,43 @@ colors:
 typography:
   display:
     fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 44px
+    fontSize: 48px
     fontWeight: 600
     lineHeight: 1.10
     letterSpacing: -0.02em
   title-1:
     fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 32px
+    fontSize: 34px
     fontWeight: 600
     lineHeight: 1.15
     letterSpacing: -0.02em
   title-2:
     fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 24px
+    fontSize: 26px
     fontWeight: 600
     lineHeight: 1.20
     letterSpacing: -0.015em
   title-3:
     fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 19px
+    fontSize: 20px
     fontWeight: 600
     lineHeight: 1.30
     letterSpacing: -0.01em
   body-lg:
     fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 17px
+    fontSize: 18px
     fontWeight: 400
     lineHeight: 1.50
     letterSpacing: -0.005em
   body:
     fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 15px
+    fontSize: 16px
     fontWeight: 400
     lineHeight: 1.55
     letterSpacing: 0
   body-strong:
     fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 15px
+    fontSize: 16px
     fontWeight: 500
     lineHeight: 1.55
     letterSpacing: 0

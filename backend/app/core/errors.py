@@ -100,6 +100,27 @@ class ResumeWrongFormat(RubricError):
     default_message = "Rubric reads PDF resumes. Export yours as a PDF and try again."
 
 
+class JobDescriptionTooLarge(RubricError):
+    code = "job_description_too_large"
+    status_code = 413
+    retryable = False
+    default_message = "That job description is over 10 MB. Export a smaller PDF and try again."
+
+
+class JobDescriptionUnreadable(RubricError):
+    code = "job_description_unreadable"
+    status_code = 400
+    retryable = False
+    default_message = "Rubric could not read text from that PDF. Upload a PDF with selectable text."
+
+
+class JobDescriptionWrongFormat(RubricError):
+    code = "job_description_wrong_format"
+    status_code = 400
+    retryable = False
+    default_message = "Upload the job description as a PDF."
+
+
 class AudioUnreadable(RubricError):
     code = "audio_unreadable"
     status_code = 400
@@ -154,6 +175,65 @@ class RateLimited(RubricError):
     status_code = 429
     retryable = True
     default_message = "Rubric is receiving a lot of requests. Try again shortly."
+
+
+class ProviderTimeout(RubricError):
+    """The model provider accepted the request and did not answer in time.
+
+    Distinct from SchemaValidationFailed, which means the provider answered
+    with something unusable. Conflating them sends the user a message about
+    an unexpected response when nothing was received at all, and hides a
+    real capacity problem behind a wording that suggests a bug.
+    """
+
+    code = "provider_timeout"
+    status_code = 504
+    retryable = True
+    default_message = (
+        "The model provider did not respond in time. Nothing was lost. Try again."
+    )
+
+
+class NotAuthenticated(RubricError):
+    """No session token, or one that has expired or been signed out.
+
+    The frontend keys its "send them to the sign in screen" behavior off
+    this code, so it must stay distinct from InvalidCredentials, which
+    means the credentials were wrong on a login attempt that was never
+    going to carry a session in the first place.
+    """
+
+    code = "not_authenticated"
+    status_code = 401
+    retryable = False
+    default_message = "Sign in to continue."
+
+
+class InvalidCredentials(RubricError):
+    """Wrong email or wrong password.
+
+    One message for both. Saying which half was wrong tells an attacker
+    which addresses have accounts.
+    """
+
+    code = "invalid_credentials"
+    status_code = 401
+    retryable = False
+    default_message = "That email and password do not match an account."
+
+
+class EmailAlreadyRegistered(RubricError):
+    code = "email_already_registered"
+    status_code = 409
+    retryable = False
+    default_message = "An account already exists for that email. Sign in instead."
+
+
+class WeakPassword(RubricError):
+    code = "weak_password"
+    status_code = 400
+    retryable = False
+    default_message = "Use a longer password."
 
 
 def install_error_handlers(app: FastAPI) -> None:

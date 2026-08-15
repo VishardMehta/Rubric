@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from pydantic import ValidationError
 
+from app.core.auth import HRUser, require_hr
 from app.core.errors import CandidateNotFound, JobNotActive, ScreeningFailed
 from app.integrations import storage
 from app.models import (
@@ -17,10 +19,12 @@ from app.models import (
     CandidateDetail,
     CandidateSummary,
     EvidenceOut,
+    ResumeProfile,
     Rubric,
     SubScoreOut,
 )
 from app.services.interview import new_token
+from app.services.resume_profile import build_resume_profile
 from app.services.scoring import band_for
 from app.services.screening import screen_candidate
 
@@ -29,7 +33,10 @@ logger = logging.getLogger("rubric.api.candidates")
 router = APIRouter(tags=["candidates"])
 
 
-def _summary(row: dict, skills_total: int) -> CandidateSummary:
+def _summary(
+    row: dict, skills_total: int, interview: dict | None = None
+) -> CandidateSummary:
+    interview = interview or {}
     return CandidateSummary(
         id=row["id"],
         name=row["name"],
@@ -41,6 +48,9 @@ def _summary(row: dict, skills_total: int) -> CandidateSummary:
         skills_total=skills_total,
         state=row["state"],
         created_at=row["created_at"],
+        interview_status=interview.get("status"),
+        interview_score=interview.get("overall_score"),
+        interview_band=interview.get("band"),
     )
 
 
@@ -69,25 +79,78 @@ def _sub_scores_out(row: dict, rubric: Rubric | None) -> list[SubScoreOut]:
     return out
 
 
-@router.get("/jobs/{job_id}/candidates", response_model=list[CandidateSummary])
-async def list_candidates(job_id: str) -> list[CandidateSummary]:
-    job = storage.get_job(job_id)
-    if job is None:
-        raise JobNotActive("That job could not be found.")
-    skills_total = len(job.get("skills") or [])
-    return [_summary(row, skills_total) for row in storage.list_candidates(job_id)]
+def _resume_profile_out(row: dict) -> ResumeProfile | None:
+    """Parse the stored profile, tolerating a stale shape.
+
+    A row written before a field was added, or by an older prompt, should
+    show what it can rather than 500 the whole screen. The profile is
+    display-only, so a partial one is still useful and a missing one is
+    already a supported state.
+    """
+    raw = row.get("resume_profile")
+    if not raw:
+        return None
+    try:
+        return ResumeProfile.model_validate(raw)
+    except ValidationError:
+        logger.warning("stored resume_profile did not validate for candidate %s", row.get("id"))
+        return None
 
 
-@router.get("/candidates/{candidate_id}", response_model=CandidateDetail)
-async def get_candidate(candidate_id: str) -> CandidateDetail:
+def owned_candidate_or_404(candidate_id: str, hr: HRUser) -> tuple[dict, dict]:
+    """Fetch a candidate whose job the signed-in account owns.
+
+    Returns (candidate_row, job_row). This is the gate that matters most in
+    the whole API: a candidate row carries the transcript, the resume text
+    and signed URLs to the original audio and PDF. Without the owner check
+    any signed-in account could read every applicant in the database by
+    walking candidate ids.
+
+    Ownership lives on the job, not the candidate, so it always takes two
+    reads: candidate, then its job. Every candidate-scoped HR route calls
+    this and none of them touch storage.get_candidate directly.
+    """
     row = storage.get_candidate(candidate_id)
     if row is None:
         raise CandidateNotFound()
-
     job = storage.get_job(row["job_id"])
+    if job is None or job.get("owner_id") != hr.id:
+        # Same 404 as a genuinely missing candidate, so this cannot be used
+        # to discover which ids exist under other accounts.
+        raise CandidateNotFound()
+    return row, job
+
+
+@router.get("/jobs/{job_id}/candidates", response_model=list[CandidateSummary])
+async def list_candidates(
+    job_id: str, hr: HRUser = Depends(require_hr)
+) -> list[CandidateSummary]:
+    job = storage.get_job(job_id)
+    if job is None or job.get("owner_id") != hr.id:
+        raise JobNotActive("That job could not be found.")
+    skills_total = len(job.get("skills") or [])
+    rows = storage.list_candidates(job_id)
+    # Fetched for the whole page rather than per row: Job Detail groups by
+    # pipeline stage and shows interview scores at the top, and an N+1 here
+    # would be one round trip per applicant.
+    interviews = storage.interview_summaries([row["id"] for row in rows])
+    return [_summary(row, skills_total, interviews.get(row["id"])) for row in rows]
+
+
+@router.get("/candidates/{candidate_id}", response_model=CandidateDetail)
+async def get_candidate(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> CandidateDetail:
+    row, job = owned_candidate_or_404(candidate_id, hr)
     rubric = (
         Rubric.model_validate(job["rubric"]) if job and job.get("rubric") else None
     )
+
+    # The interview, if one has been minted. Candidate Detail needs both of
+    # these: the token to show the interview link after approval, and the
+    # status to decide whether to offer a link to the result
+    # (screens.md section 4, "Post-approval state" and "Interviewed state").
+    interview = storage.get_interview_by_candidate(candidate_id)
 
     return CandidateDetail(
         id=row["id"],
@@ -112,60 +175,65 @@ async def get_candidate(candidate_id: str) -> CandidateDetail:
         ),
         resume_url=storage.signed_url(storage.BUCKET_RESUMES, row.get("resume_path")),
         resume_text=row.get("resume_text"),
+        resume_profile=_resume_profile_out(row),
+        interview_status=interview["status"] if interview else None,
+        interview_token=interview["token"] if interview else None,
     )
 
 
 @router.post("/candidates/{candidate_id}/approve", response_model=ApprovalResult)
-async def approve_candidate(candidate_id: str) -> ApprovalResult:
+async def approve_candidate(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> ApprovalResult:
     """Approve for interview and mint the interview link.
 
     Idempotent: approving twice returns the same token rather than
     creating a second interview or invalidating a link HR may have already
     sent to the candidate.
+
+    The read, the insert and the state change happen inside one Postgres
+    function rather than as three calls from here. Two fast clicks used to
+    interleave: both saw no interview, both inserted, and the loser hit the
+    interviews.candidate_id unique constraint and surfaced as a 500.
     """
-    row = storage.get_candidate(candidate_id)
-    if row is None:
-        raise CandidateNotFound()
+    owned_candidate_or_404(candidate_id, hr)
 
-    existing = storage.get_interview_by_candidate(candidate_id)
-    if existing is not None:
-        token = existing["token"]
-    else:
-        token = new_token()
-        storage.create_interview(candidate_id, token)
+    result = storage.approve_candidate_atomic(candidate_id, new_token())
 
-    if row["state"] not in ("approved", "interviewing", "interviewed"):
-        storage.set_candidate_state(candidate_id, "approved")
+    # Approving and sending are one act in the UI, so the invitation is
+    # stamped here. The column exists separately because the candidate
+    # portal must only surface a link that was actually sent, and a token
+    # minted is not a token sent.
+    interview = storage.get_interview_by_candidate(candidate_id)
+    if interview and not interview.get("invited_at"):
+        storage.mark_interview_invited(interview["id"])
 
     return ApprovalResult(
         candidate_id=candidate_id,
-        state="approved",
-        interview_token=token,
-        interview_path=f"/interview/{token}",
+        state=result["state"],
+        interview_token=result["token"],
+        interview_path=f"/interview/{result['token']}",
     )
 
 
 @router.post("/candidates/{candidate_id}/reject", response_model=CandidateSummary)
-async def reject_candidate(candidate_id: str) -> CandidateSummary:
-    row = storage.get_candidate(candidate_id)
-    if row is None:
-        raise CandidateNotFound()
-
+async def reject_candidate(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> CandidateSummary:
+    _row, job = owned_candidate_or_404(candidate_id, hr)
     updated = storage.set_candidate_state(candidate_id, "rejected")
-    job = storage.get_job(row["job_id"])
     return _summary(updated, len((job or {}).get("skills") or []))
 
 
 @router.post("/candidates/{candidate_id}/rescreen", response_model=CandidateDetail)
-async def rescreen_candidate(candidate_id: str) -> CandidateDetail:
+async def rescreen_candidate(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> CandidateDetail:
     """Retry a screening that failed, without asking the candidate to
     reapply. Their audio, transcript and resume are already saved."""
-    row = storage.get_candidate(candidate_id)
-    if row is None:
-        raise CandidateNotFound()
+    row, job = owned_candidate_or_404(candidate_id, hr)
 
-    job = storage.get_job(row["job_id"])
-    if job is None or not job.get("rubric"):
+    if not job.get("rubric"):
         raise JobNotActive("That job no longer has a rubric to score against.")
 
     rubric = Rubric.model_validate(job["rubric"])
@@ -192,4 +260,32 @@ async def rescreen_candidate(candidate_id: str) -> CandidateDetail:
         assessment=result.assessment,
         recommendation=result.recommendation,
     )
-    return await get_candidate(candidate_id)
+    return await get_candidate(candidate_id, hr)
+
+
+@router.post("/candidates/{candidate_id}/reparse-resume", response_model=CandidateDetail)
+async def reparse_resume(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> CandidateDetail:
+    """Retry a resume profile that failed, without asking the candidate to
+    reapply. Mirrors rescreen: their resume text is already saved.
+
+    Unlike rescreen this cannot change any score, because the profile is
+    display only and screening reads the raw text.
+    """
+    row, _job = owned_candidate_or_404(candidate_id, hr)
+
+    resume_text = row.get("resume_text") or ""
+    if not resume_text.strip():
+        raise CandidateNotFound("There is no resume text to read for this candidate.")
+
+    try:
+        profile = build_resume_profile(resume_text)
+    except Exception:
+        logger.exception("resume reparse failed for candidate %s", candidate_id)
+        raise ScreeningFailed(
+            "The resume could not be read into a profile. Their resume text is saved."
+        ) from None
+
+    storage.save_resume_profile(candidate_id, profile.model_dump())
+    return await get_candidate(candidate_id, hr)

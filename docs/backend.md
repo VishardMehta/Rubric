@@ -66,6 +66,12 @@ Not permitted: LangChain, LangGraph, Instructor, Celery, Redis, SQLAlchemy,
 
 Supabase Postgres. This supersedes the draft in `PROJECT.md`.
 
+The five tables below are `database/schema.sql`. HR accounts, job ownership
+and the atomic operations were added afterwards in
+`database/002_accounts.sql`, summarised in §3.1. `schema.sql` is not edited
+retrospectively, so the two files together are the current schema and the
+split records what was added when.
+
 ```sql
 create extension if not exists "pgcrypto";
 
@@ -179,11 +185,166 @@ not. The API resolves a path to a signed URL at response time.
 **RLS** Leave enabled. The backend uses `service_role` and bypasses it. The
 frontend has no Supabase credentials at all.
 
+### 3.1 Accounts and ownership
+
+`database/002_accounts.sql`, added after the MVP shipped. Additive only.
+
+```sql
+create table hr_users (
+  id            uuid primary key default gen_random_uuid(),
+  email         text not null unique,     -- stored lowercased
+  name          text not null,
+  company       text,
+  password_hash text not null,            -- scrypt, hex
+  password_salt text not null,            -- 16 random bytes, hex
+  created_at    timestamptz not null default now()
+);
+
+create table hr_sessions (
+  token      text primary key,            -- secrets.token_urlsafe(32)
+  hr_user_id uuid not null references hr_users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+alter table jobs add column owner_id uuid references hr_users(id) on delete cascade;
+```
+
+`owner_id` is nullable because rows created before accounts existed have no
+owner. The first account registered claims all of them, inside the same
+transaction as its own insert.
+
+Passwords use `hashlib.scrypt` from the standard library. CLAUDE.md forbids
+adding a dependency without asking, and bcrypt or argon2 would be one. Cost
+parameters are named in `app/core/heuristics.py`. Sessions are opaque tokens
+in a table rather than JWTs, because a JWT cannot be revoked without a
+server-side list, at which point it is a session table with extra steps.
+
+**Atomic operations.** PostgREST cannot run a multi-statement transaction and
+the supabase python client exposes no transaction API, so anything that must
+be all-or-nothing is a Postgres function called through `client.rpc()`:
+
+| Function | Why it cannot be separate calls |
+|---|---|
+| `register_hr_user` | The insert and the ownerless-job claim must both happen or neither. A partial run leaves a registered user whose jobs are orphaned with no route back to them |
+| `approve_candidate_atomic` | Read, insert, update used to interleave on a double click: both calls saw no interview, both inserted, and the loser hit the `interviews.candidate_id` unique constraint and surfaced as a 500 |
+
+`POST /jobs` and `POST /apply` are deliberately **not** atomic. Both have a
+model call in the middle, and both leave a recoverable partial state on
+purpose so nothing the user or the candidate did is lost.
+
+The in-memory demo store (`app/integrations/demo_supabase.py`) implements
+both functions again in Python. That duplication is the price of DEMO_MODE
+running the real storage layer instead of stubbing it; the demo-mode tests
+assert on the behavior that separates them, so a drift fails a test.
+
 ---
 
 ## 4. API
 
 All routes are prefixed `/api`. All responses are JSON. Errors follow §9.
+
+**Authentication.** Every HR route requires `Authorization: Bearer <token>`
+and answers `401 not_authenticated` without one. Every candidate route, and
+`/health`, is public. Enforcement is a per-route FastAPI dependency
+(`app/core/auth.py`), not middleware: the candidate side is public by design,
+and a middleware allowlist that drifts either locks a candidate out of their
+interview or exposes HR's data, with neither failure visible from the route
+it affects.
+
+**Ownership.** On top of the session, every HR route checks that the job, or
+the candidate's job, belongs to the signed-in account. Someone else's row
+answers 404, never 403, so the route cannot be used to discover which ids
+exist under other accounts. `app/api/jobs.owned_job_or_404` and
+`app/api/candidates.owned_candidate_or_404` are the only two gates; a route
+that reads `storage.get_job` or `storage.get_candidate` directly is how an
+IDOR gets in.
+
+### Job description parsing
+
+`POST /jobs/description-document` returns `{text, facts}`. `facts` is a
+`JobFacts` object, or null when parsing failed.
+
+Every field except `skills` and `description` is nullable, and the prompt is
+told to return null rather than guess. Verified against the two PDFs in
+`Demofiles/`: neither states pay, and both return `compensation: null`
+rather than a range inferred from the seniority. A named office location
+alone does not produce `workplace_type`, because plenty of onsite-sounding
+roles are hybrid and the document has not said.
+
+Parsing failure is not an error. The raw text is still returned, which is
+exactly what this endpoint did before parsing existed, so a rate limited
+model degrades to the old behavior instead of blocking HR from posting a
+role.
+
+### Candidate portal
+
+`GET /applications?email=` is unauthenticated and returns every application
+from one email address. There are no candidate accounts: a password would
+need a reset flow, which would need email delivery, which is out of scope.
+
+**It must never carry a score.** The candidate never sees one, at any point
+(product.md section 2), and this is the only candidate-facing response
+built from a candidate row, which holds `screening_score`,
+`screening_band`, `recommendation`, `sub_scores` and `assessment`. The
+response is assembled field by field from a whitelist, never by spreading a
+row or reusing an HR model, and `tests/test_applications.py` asserts on the
+serialized payload so a field added to the model fails there even if it
+type checks.
+
+The internal candidate state is collapsed to a coarser candidate-facing
+vocabulary: `rejected` and `screened` are words for the hiring team. A
+rejected application reads as `closed` and says nothing about why.
+
+`interviews.invited_at` separates approving from sending. The portal
+surfaces a link only once HR has actually invited them, and withdraws it
+once the interview is complete so a finished link cannot be reopened.
+
+**Known and accepted:** anyone who knows an email can see the roles that
+address applied to and the status of each. It carries no score, and it is
+recorded in the README next to the other stated limits.
+
+### Resume profile
+
+`candidates.resume_profile jsonb`, added in `database/002_accounts.sql`.
+Built by one Gemini call inside `POST /apply`, after resume extraction and
+before screening.
+
+**Display only.** Screening reads the raw resume text against the rubric and
+remains the only stage that produces a number. Summarising first and scoring
+the summary would put a lossy step between the evidence and the score, and
+the evidence quotes on Candidate Detail are checked against the original
+text.
+
+**Never fatal.** A failure leaves the column null and the application
+completes. The candidate has just recorded a two minute introduction;
+losing that because a display convenience failed would be absurd. Candidate
+Detail falls back to the raw `resume_text` disclosure it has always shown.
+`POST /candidates/{id}/reparse-resume` retries it later, mirroring
+`rescreen`, and unlike rescreen it cannot change any score.
+
+**Nothing is inferred.** Dates, grades and titles are copied as the resume
+writes them. A computed graduation year is indistinguishable from a stated
+one, and this is attached to a named person. Course projects are kept out of
+the work history and left in the resume text where screening reads them.
+
+One validator earns its place: a link must be a real URL. Observed on a real
+resume, a PDF hyperlink whose anchor text was "Kaggle" extracted as the bare
+word and came back as a link, which would render as an anchor to nowhere.
+The model is told to correct it rather than the value being dropped
+silently.
+
+### Accounts
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/auth/register` | Create an account, sign in, claim ownerless jobs if first. Returns the token |
+| `POST` | `/auth/login` | Sign in. Returns the token |
+| `POST` | `/auth/logout` | Delete the session. Succeeds even with a dead token |
+| `GET` | `/auth/me` | The current account. Used to validate a stored token on load |
+
+`/auth/login` returns the same error for an unknown email and a wrong
+password, so it cannot be used to enumerate registered addresses.
 
 ### Jobs
 

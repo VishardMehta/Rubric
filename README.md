@@ -54,8 +54,24 @@ Copy `backend/.env.example` to `backend/.env` and fill in:
 | `GEMINI_API_KEY` | aistudio.google.com, free tier |
 | `GROQ_API_KEY` | console.groq.com, free tier |
 
-Run `database/schema.sql` in the Supabase SQL editor, then create three private
-storage buckets: `introductions`, `answers` and `resumes`.
+Run `database/schema.sql` in the Supabase SQL editor. It creates the five
+tables, enables row level security, and creates the three private storage
+buckets (`introductions`, `answers`, `resumes`).
+
+Then run `database/002_accounts.sql`. It adds HR accounts and sessions, gives
+jobs an owner, and adds the two Postgres functions that make registration and
+candidate approval atomic. It is additive and safe to re-run.
+
+Optionally run `database/seed.sql` after those for demo data: two jobs, five
+applications and one completed interview, enough to open every screen with
+something on it. The scores and transcripts in that file are written by hand
+rather than produced by Gemini and Groq, so it is a way to see the UI, not a
+way to see the pipeline. Re-running it is a no-op.
+
+Run it **before** you register your first account. Seeded jobs have no owner,
+and the first account claims every ownerless job; seed afterwards and the new
+rows stay invisible until you assign them by hand. The SQL to do that is in a
+comment at the top of `database/002_accounts.sql`.
 
 ## Running
 
@@ -111,14 +127,50 @@ DEMO_MODE=1 .venv/bin/uvicorn app.main:app --port 8123
 ```
 
 Replays recorded responses for the golden job and candidate instead of calling
-Gemini, Groq or Supabase. Verify it works with the network disconnected before
-any client demo.
+Gemini, Groq or Supabase. The whole product runs from `backend/tests/cassettes/`
+with no keys and no network.
 
-Re-record after changing a prompt:
+Verify that claim rather than trusting it:
+
+```bash
+cd backend && .venv/bin/python -m pytest tests/test_demo_mode.py -q
+```
+
+Those tests disable IP networking inside the process and then drive the full
+demo flow over HTTP. A cassette miss raises `cassette_miss` and never falls
+through to a network call, which is the entire point: a demo mode that quietly
+reaches for the internet would still get rate limited during the demo it exists
+to protect.
+
+Re-record after changing any prompt. A prompt edit changes the cassette key, so
+a stale recording misses loudly instead of replaying the answer to a question
+that is no longer being asked:
 
 ```bash
 cd backend && .venv/bin/python -m tests.record_cassettes
 ```
+
+## Harnesses
+
+Both make real API calls, so they run on demand rather than in CI.
+
+```bash
+cd backend
+.venv/bin/python -m tests.consistency_harness              # score stability
+.venv/bin/python -m tests.synthetic_candidate --persona vague
+```
+
+`consistency_harness` scores one transcript five times and fails if the range
+exceeds the threshold in `app/core/heuristics.py`. There is no ground truth for
+a screening score, so variance is the only measurable property, and it is the
+one that decides whether re-running a candidate in front of a client produces
+the same number. Run it after any change to the screening prompt.
+
+`synthetic_candidate` plays a full interview against a scripted persona, then
+grades the **interviewer** on repeats, coverage, anchoring, progression and
+answer leaking. Run the `vague` persona: a strong candidate makes any
+interviewer look good, while a candidate who answers everything with "we used
+best practices" is what makes a reactive interviewer loop or drift.
 
 ## Documentation
 
@@ -128,7 +180,7 @@ cd backend && .venv/bin/python -m tests.record_cassettes
 | `DESIGN.md` | Design tokens |
 | `docs/design-system.md` | Components, states, application rules |
 | `docs/product.md` | Product structure, states, routes, interview plan |
-| `docs/screens.md` | Nine screen specifications |
+| `docs/screens.md` | Ten screen specifications |
 | `docs/backend.md` | Schema, API, LLM stages, validation, tests |
 | `docs/implementation-plan.md` | Sequential build plan |
 | `docs/prior-art.md` | Open-source projects reviewed and what was adopted |
@@ -136,10 +188,46 @@ cd backend && .venv/bin/python -m tests.record_cassettes
 
 ## Notes
 
-There is no HR authentication. This is a deliberate decision for a localhost
-demo, not an oversight.
+HR signs in with an email and a password, and sees only the roles they posted
+and the applicants to those roles. The first account you register claims every
+job that already existed, including everything from `database/seed.sql`.
 
-Candidates never see their own scores.
+Registration is open to anyone who can reach the page, and there is no password
+reset. Both follow from email delivery being out of scope: an invitation or a
+reset link has nowhere to go. On a localhost demo that is the right trade, but
+it is a stated one rather than an accident.
+
+### Demo sign in
+
+`DEMO_AUTH=1` in `backend/.env` makes any email and any password sign in,
+creating the account on the spot, and makes the candidate portal fall back
+to showing every application when the address it is given has none. It is
+for walking someone through the product without stopping to remember a
+password.
+
+It is a real authentication bypass, so it is loud about it: the backend
+logs a warning on every boot and on every sign in, `GET /api/health`
+reports `demo_auth`, and the sign in screen says so on the page. Turn it off
+with `DEMO_AUTH=0`.
+
+It is separate from `DEMO_MODE`, which swaps the database for an in-memory
+store. The test suite pins it off, so the real login path is always what is
+tested.
+
+The session token is kept in `localStorage`, so any script running on the page
+could read it. There are no third-party scripts here, which is what makes that
+acceptable; it would not be on a deployed build.
+
+Candidates never see their own scores, and the candidate side has no accounts
+at all. Roles are public, and an interview link is an opaque 256-bit token.
+
+Candidates track their applications by entering the email they applied with,
+at `/apply` under My applications. An interview invitation appears there once
+HR approves them. Anyone who knows an email address can see the roles that
+address applied to and the status of each; the response carries no score,
+band, recommendation or assessment, which is what makes that acceptable on a
+localhost demo. There is no candidate password, because a reset flow would
+need email delivery.
 
 This is an academic demonstration and is not intended for screening real
 candidates.

@@ -7,10 +7,12 @@ duration of the underlying model calls.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import apply, candidates, health, interview, jobs
+from app.api import applications, apply, auth, candidates, health, interview, jobs
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 
@@ -28,11 +30,22 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Loud on every boot. An authentication bypass that starts quietly is
+    # one nobody remembers is on.
+    if settings.demo_auth:
+        logging.getLogger("rubric").warning(
+            "DEMO_AUTH is on: any email and any password will sign in, and the "
+            "candidate portal falls back to showing every application. Never "
+            "run this way outside a demo."
+        )
+
     install_error_handlers(app)
 
     app.include_router(health.router, prefix="/api")
+    app.include_router(auth.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(apply.router, prefix="/api")
+    app.include_router(applications.router, prefix="/api")
     app.include_router(candidates.router, prefix="/api")
     app.include_router(interview.router, prefix="/api")
 

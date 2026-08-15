@@ -436,3 +436,104 @@ FULL INTERVIEW TRANSCRIPT
 {chr(10).join(transcript_lines).strip()}\
 """
     return EVALUATION_SYSTEM, user
+
+
+# ---------------------------------------------------------------------
+# Stage 0: job description parsing. Feeds the Create Job form.
+# ---------------------------------------------------------------------
+#
+# Not a scoring stage. This one only fills in a form HR is about to review
+# and edit, so the cost of a wrong answer is different from the rest of
+# the pipeline: a bad rubric produces bad scores, whereas a bad extraction
+# produces a field HR corrects in two seconds. What it must never do is
+# invent a fact that looks plausible enough not to get corrected.
+
+JOB_FACTS_SYSTEM = """\
+You read a job description document and pull out the facts a hiring form \
+needs. You are a careful reader, not a writer: everything you return has \
+to be traceable to something the document actually says.
+
+The one rule that matters: if the document does not state something, \
+return null for it. Do not infer a salary band from the seniority. Do not \
+infer remote or onsite from the presence of an office address, because \
+plenty of onsite-sounding roles are hybrid and the document has simply not \
+said. Do not guess a department from the team's subject matter. A null \
+field costs the recruiter one moment of typing; a confidently wrong one \
+gets published to candidates because it looked right.
+
+Say what the document says. Where it gives a number, a place or a title, \
+copy it in the document's own words rather than paraphrasing it into \
+something tidier. "18 to 24 LPA" stays "18 to 24 LPA".
+
+For the description body, keep the responsibilities and what the team is \
+looking for, and keep the document's voice. Drop the parts a hiring form \
+does not need: how to apply, equal-opportunity boilerplate, the company's \
+awards, and anything you have already returned as a separate field.
+
+For skills, list the concrete tools, languages and technologies a resume \
+would name: SQL, Power BI, Python, Tableau, Excel. Leave out dispositions \
+like "self-motivated" or "team player". Those matter for the role, but \
+they are scored from what a candidate says about their work, not matched \
+against a keyword.\
+"""
+
+
+def job_facts_prompts(document_text: str) -> tuple[str, str]:
+    """System and user prompt for parsing an uploaded job description."""
+    user = f"""\
+Pull the hiring facts out of this job description.
+
+JOB DESCRIPTION DOCUMENT
+{document_text}\
+"""
+    return JOB_FACTS_SYSTEM, user
+
+
+# ---------------------------------------------------------------------
+# Resume profile. Feeds Candidate Detail, never a score.
+# ---------------------------------------------------------------------
+#
+# Kept deliberately separate from screening. Screening reads the raw
+# resume text against the rubric and is the only stage that produces a
+# number. This one exists so HR can see who they are looking at without
+# reading a wall of extracted text.
+
+RESUME_PROFILE_SYSTEM = """\
+You read a resume and lay out what it says. You are a careful reader, not \
+an evaluator: you do not judge the candidate, rank them, or comment on \
+whether they are suitable for anything. Someone else scores this person \
+against a rubric, and they read the original text, not your summary.
+
+Copy, do not compute. Dates, grades, titles and institution names go in \
+exactly as the resume writes them. If a resume says "2023 - 2027", that is \
+the period; do not turn it into "4 years" or work out a graduation year. If \
+it gives no dates for a role, the period is null. A date you calculated is \
+indistinguishable from one the candidate wrote, and this is attached to a \
+named person.
+
+Return null, or an empty list, for anything absent. A sparse resume is a \
+real resume, not a failure, and a null field is honest where a guess is \
+not.
+
+Separate work from projects. Jobs, internships and substantial positions \
+of responsibility are experience. Course projects and personal builds are \
+not, however impressive: they stay in the resume text where the screening \
+stage reads them.
+
+For highlights, take what the person actually did, in the resume's own \
+words, preferring bullets that name a concrete task, tool or result over \
+ones that describe a responsibility in the abstract. "Built Power BI \
+dashboards that cut manual analysis time by 40%" over "Responsible for \
+reporting and stakeholder engagement".\
+"""
+
+
+def resume_profile_prompts(resume_text: str) -> tuple[str, str]:
+    """System and user prompt for structuring one resume."""
+    user = f"""\
+Lay out what this resume says.
+
+RESUME TEXT
+{resume_text}\
+"""
+    return RESUME_PROFILE_SYSTEM, user

@@ -136,6 +136,62 @@
      neon blob design-system.md section 22 rules out. */
 }
 
+/* --- CameraPreview ------------------------------------------------------ */
+
+.rb-camera {
+  position: relative;
+  width: 230px;
+  height: 172px;
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+
+.rb-camera video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.rb-camera--unavailable::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: var(--color-surface-sunken);
+}
+
+.rb-camera__guide {
+  position: absolute;
+  inset: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.rb-camera__guide span {
+  width: 44%;
+  height: 68%;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 46% 46% 42% 42%;
+}
+
+.rb-camera__caption {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  margin: 0;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgba(26, 26, 25, 0.68);
+  color: var(--color-on-dark);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 /* --- CopyLinkField -------------------------------------------------------
  * screens.md sections 2 and 4. The URL is shown in full, never truncated:
  * HR pastes this into an email and needs to verify it by eye first.

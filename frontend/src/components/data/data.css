@@ -20,6 +20,16 @@
   gap: var(--space-2);
 }
 
+/* dd comes first in the DOM because the number is the description of the
+   term; this only swaps the visual order (see Stat.labelFirst). */
+.rb-stat-row__item--label-first {
+  flex-direction: row-reverse;
+}
+
+.rb-stat-row__item--label-first .rb-stat-row__label::first-letter {
+  text-transform: uppercase;
+}
+
 /* dd before dt in the markup, so the number leads and the word follows it
    the way the spec writes it: "48 applicants". */
 .rb-stat-row__value {
@@ -79,6 +89,18 @@
   line-height: var(--text-score-hero-line-height);
   letter-spacing: var(--text-score-hero-letter-spacing);
   font-variant-numeric: tabular-nums;
+  animation: rb-score-appear var(--duration-slow) var(--ease-entrance);
+}
+
+@keyframes rb-score-appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .rb-score-hero__value--positive {
@@ -252,6 +274,8 @@
 .rb-table-wrap {
   width: 100%;
   overflow-x: auto;
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
 }
 
 .rb-table {
@@ -277,7 +301,7 @@
 }
 
 .rb-table td {
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-5) var(--space-3);
   border-bottom: 1px solid var(--color-hairline);
   font-size: var(--text-body-size);
   color: var(--color-ink);
