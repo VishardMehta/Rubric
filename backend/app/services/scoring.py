@@ -16,7 +16,13 @@ from app.core.heuristics import (
     EVAL_COMMUNICATION_WEIGHT,
     EVAL_EXPERIENCE_WEIGHT,
     EVAL_TECHNICAL_WEIGHT,
+    SCREENING_RESUME_WEIGHT,
+    SCREENING_VOICE_WEIGHT,
 )
+
+# A silent drift here would change every candidate's score without anything
+# failing, so it is checked at import rather than trusted.
+assert abs(SCREENING_RESUME_WEIGHT + SCREENING_VOICE_WEIGHT - 1.0) < 1e-9
 
 Band = Literal["strong", "borderline", "weak"]
 
@@ -28,6 +34,22 @@ def band_for(score: int) -> Band:
     if score >= BAND_BORDERLINE_MIN:
         return "borderline"
     return "weak"
+
+
+def weighted_screening(resume_score: int, voice_score: int) -> int:
+    """The final screening score from its two 0-100 components.
+
+    The single place this arithmetic exists. Every caller that stores,
+    ranks, bands or displays a screening score reads the result of this,
+    so the weighting cannot be applied in one place and forgotten in
+    another.
+
+    The components stay on the row alongside it, because "72 overall" is
+    not explainable without "81 on the resume, 58 on the introduction".
+    """
+    return round(
+        resume_score * SCREENING_RESUME_WEIGHT + voice_score * SCREENING_VOICE_WEIGHT
+    )
 
 
 def weighted_overall(

@@ -26,7 +26,7 @@ from app.integrations.resume import extract_resume
 from app.integrations.stt import transcribe
 from app.models import CandidateCreated, Rubric
 from app.services.resume_profile import try_build_resume_profile
-from app.services.scoring import band_for
+from app.services.scoring import band_for, weighted_screening
 from app.services.screening import screen_candidate
 
 logger = logging.getLogger("rubric.api.apply")
@@ -142,11 +142,17 @@ def _apply(
         storage.mark_screening_failed(candidate["id"])
         raise ScreeningFailed() from None
 
+    # The rubric is scored twice, once per source; the final figure is the
+    # weighted combination and is computed in exactly one place.
+    final_score = weighted_screening(result.total_score, result.voice_total_score)
     storage.save_screening(
         candidate["id"],
-        score=result.total_score,
-        band=band_for(result.total_score),
+        score=final_score,
+        band=band_for(final_score),
+        resume_score=result.total_score,
+        voice_score=result.voice_total_score,
         sub_scores=[s.model_dump() for s in result.sub_scores],
+        voice_sub_scores=[s.model_dump() for s in result.voice_sub_scores],
         matched_skills=result.matched_skills,
         unevidenced_skills=result.unevidenced_skills,
         conflicts=result.resume_intro_conflicts,

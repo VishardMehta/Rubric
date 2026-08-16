@@ -34,3 +34,23 @@ backend/tests/cassettes/.local/
 
 # Logs
 *.log
+
+# --- Not shipped -----------------------------------------------------------
+#
+# Real candidate documents. Three of these are actual resumes belonging to
+# real people; they are development inputs, not sample data, and must not
+# be published. They stay on disk for local testing.
+Demofiles/
+
+# Client-facing and internal build notes. Nothing here is needed to run the
+# project, and PROJECT.md carries commercial terms.
+PROJECT.md
+CLAUDE.md
+DESIGN.md
+docs/implementation-plan.md
+docs/prior-art.md
+docs/reference/
+
+# Demo rows naming real people, and a shipped database should start empty
+# anyway. Post a job and apply to populate it.
+database/seed.sql

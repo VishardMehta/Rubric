@@ -126,7 +126,7 @@ async def start_interview(token: str) -> InterviewSession:
     if interview["status"] == "in_progress":
         return await get_session(token)
 
-    plan = generate_plan(rubric, candidate)
+    plan = generate_plan(rubric, candidate, job)
     state = InterviewState.initial(rubric)
 
     first = plan.slot(1)
@@ -206,7 +206,9 @@ def _advance(
     # The same model call scores this answer and writes the next question,
     # so there is one stage here and not two.
     yield STAGE_REVIEWING if is_final else STAGE_PREPARING
-    result = advance_turn(rubric, plan, state, slot, transcript, is_final)
+    result = advance_turn(
+        rubric, plan, state, slot, transcript, is_final, candidate
+    )
 
     answered = plan.slot(slot)
     probed = answered.criterion_ids if answered else []

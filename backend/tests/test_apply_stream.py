@@ -70,6 +70,20 @@ def wired(monkeypatch):
                 )
             ],
             total_score=20,
+            voice_sub_scores=[
+                SubScore(
+                    criterion_id=rubric.criteria[0].id,
+                    evidence=[
+                        Evidence(
+                            source="introduction",
+                            quote="built a recommendation service at Zoho",
+                        )
+                    ],
+                    points_awarded=30,
+                    points_possible=rubric.criteria[0].points,
+                )
+            ],
+            voice_total_score=30,
             matched_skills=["Python"],
             unevidenced_skills=["Django"],
             resume_intro_conflicts=[],

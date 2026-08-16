@@ -21,8 +21,7 @@ import secrets
 from typing import Any
 
 from app.core.heuristics import (
-    PLAN_MAX_QUESTIONS,
-    PLAN_MIN_QUESTIONS,
+    PLAN_TOTAL_QUESTIONS,
     STATE_CLAIMS_MADE_CAP,
     TURN_GENERATION_MAX_RETRIES,
 )
@@ -59,16 +58,21 @@ def new_token() -> str:
 
 
 def planned_question_count(rubric: Rubric) -> int:
-    """Total questions for this rubric.
+    """Total questions. The same number for every interview.
 
-    Three fixed openers plus roughly one slot per criterion, clamped to the
-    range in heuristics.py. A 4 criterion rubric gives 6 questions, a 7
-    criterion rubric gives 9 (backend.md 5.3).
+    It used to scale with rubric breadth, from 5 questions to 10. Two
+    problems with that: a narrow rubric produced a short interview that had
+    to carry the same hiring decision, and two candidates could not be
+    compared on anything without first checking they had been asked the
+    same number of questions.
+
+    The rubric still decides what the questions are about. It no longer
+    decides how many there are.
+
+    The argument is kept so every caller still reads as "the count for this
+    rubric", and so a per-role count can come back without touching them.
     """
-    return max(
-        PLAN_MIN_QUESTIONS,
-        min(PLAN_MAX_QUESTIONS, len(rubric.criteria) + 2),
-    )
+    return PLAN_TOTAL_QUESTIONS
 
 
 # ---------------------------------------------------------------------
@@ -165,9 +169,21 @@ class InterviewState:
 # ---------------------------------------------------------------------
 
 
-def generate_plan(rubric: Rubric, screening: dict[str, Any] | None) -> InterviewPlan:
+def generate_plan(
+    rubric: Rubric,
+    screening: dict[str, Any] | None,
+    job: dict[str, Any] | None = None,
+) -> InterviewPlan:
+    """Plan the whole interview once, before the first question.
+
+    `screening` is the candidate row: it carries the resume text, the
+    parsed resume profile, the voice introduction and the per-criterion
+    screening scores. All of it goes into the prompt, because a planner
+    that has not seen the resume cannot plan a question that names a
+    project on it.
+    """
     total = planned_question_count(rubric)
-    system, user = plan_prompts(rubric, screening, total)
+    system, user = plan_prompts(rubric, screening, total, job)
     return generate_structured(
         system,
         user,
@@ -189,6 +205,7 @@ def advance_turn(
     answered_slot: int,
     answer_transcript: str,
     is_final: bool,
+    candidate: dict[str, Any] | None = None,
 ) -> TurnResult | AnswerAnalysis:
     """Score the answer that just arrived and, unless this was the last
     slot, generate the next question.
@@ -209,12 +226,16 @@ def advance_turn(
             max_retries=TURN_GENERATION_MAX_RETRIES,
         )
 
-    system, user = turn_prompts(rubric, answered, next_slot, state, answer_transcript)
+    system, user = turn_prompts(
+        rubric, answered, next_slot, state, answer_transcript, candidate
+    )
     return generate_structured(
         system,
         user,
         TurnResult,
-        validate=lambda result: validate_turn(result, rubric, answered, state, next_slot),
+        validate=lambda result: validate_turn(
+            result, rubric, answered, state, next_slot, answer_transcript
+        ),
         max_retries=TURN_GENERATION_MAX_RETRIES,
     )
 

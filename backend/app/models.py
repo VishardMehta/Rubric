@@ -119,12 +119,37 @@ class PlannedQuestion(BaseModel):
     """
 
     slot: int = Field(description="Position in the interview, starting at 1.")
+    # Chosen before the intent, so the intent is written to serve a decided
+    # kind of question rather than the kind being labelled after the fact.
+    kind: Literal["resume", "technical", "experience", "followup"] = Field(
+        description=(
+            "What sort of question this slot is. 'resume' asks about a "
+            "specific project, employer or skill named on their resume. "
+            "'technical' tests a skill the role needs, independent of their "
+            "history. 'experience' asks how they worked: a decision they "
+            "made, a tradeoff, a disagreement, something that went wrong. "
+            "'followup' presses on whatever they said in the previous "
+            "answer, and is the only kind that depends on the previous "
+            "answer. Vary these: an interview that repeats one kind tests "
+            "one facet of a person over and over."
+        )
+    )
     intent: str = Field(
         description=(
             "One short sentence stating what this question is for, written for "
             "the interviewer rather than the candidate. For example 'Probe how "
             "they handled query performance at scale'."
         )
+    )
+    anchor: str | None = Field(
+        default=None,
+        description=(
+            "For a 'resume' slot, the exact project, employer, tool or skill "
+            "from their resume this question is about, named as their resume "
+            "names it, so the question can mention it. Null for every other "
+            "kind. Never invent one: if their resume does not name it, it "
+            "does not go here."
+        ),
     )
     criterion_ids: list[str] = Field(
         description=(
@@ -134,7 +159,7 @@ class PlannedQuestion(BaseModel):
     )
     depth: Literal["opening", "probing", "deep"] = Field(
         description=(
-            "opening for the first three orienting questions, probing for "
+            "opening for the first two orienting questions, probing for "
             "questions that ask for specifics, deep for questions that press "
             "on tradeoffs and edge cases. Depth may not decrease as slots "
             "advance, and deep may not appear before slot 4."
@@ -145,13 +170,14 @@ class PlannedQuestion(BaseModel):
 class InterviewPlan(BaseModel):
     questions: list[PlannedQuestion] = Field(
         description=(
-            "One entry per slot, in order, starting at slot 1. Slots 1 to 3 "
-            "are fixed openers: slot 1 asks the candidate to introduce "
-            "themselves and their background, slot 2 asks about a project they "
-            "worked on, slot 3 asks what their personal contribution to it "
-            "was. Plan the remaining slots so that every rubric criterion is "
-            "probed at least once across the whole interview, spending the "
-            "extra slots on criteria where the screening evidence was thin."
+            "One entry per slot, in order, starting at slot 1. Slot 1 is a "
+            "fixed opener asking the candidate to introduce themselves, kind "
+            "'experience'. Slot 2 asks about a specific project named on "
+            "their resume, kind 'resume'. Plan the remaining slots so that "
+            "every rubric criterion is probed at least once across the whole "
+            "interview, spending the extra slots on criteria where the "
+            "screening evidence was thin, and so that the kinds vary rather "
+            "than running in a block."
         )
     )
 
@@ -357,23 +383,58 @@ class SubScore(BaseModel):
 class Screening(BaseModel):
     """Result of scoring one candidate against the rubric.
 
-    Both sources are scored together in a single pass: the resume carries
-    structured facts (employers, dates, titles) the spoken introduction
-    usually will not, and the introduction carries reasoning and ownership
-    a resume cannot.
+    Two components, scored in one pass against the same rubric.
+
+    The resume and the introduction answer different questions. A resume
+    carries structured facts - employers, dates, titles, tools - that a
+    two minute spoken introduction never will. The introduction carries
+    reasoning, ownership and how clearly someone explains their own work,
+    which a resume cannot show at all. Rolling both into one number let a
+    polished CV carry a candidate who could not describe anything they had
+    built, and the reverse.
+
+    So each source is scored against the whole rubric on its own, giving
+    two independent 0 to 100 figures, and Python weights them into the
+    final score (SCREENING_RESUME_WEIGHT / SCREENING_VOICE_WEIGHT). The
+    rubric itself is untouched: it still totals exactly 100, and each
+    component is a full scoring of it.
+
+    Field order is load-bearing throughout: the resume component is
+    generated before the voice component, and within each, evidence comes
+    before points.
     """
 
     sub_scores: list[SubScore] = Field(
         description=(
-            "Exactly one entry for every criterion in the rubric, in rubric "
-            "order. Score every criterion even when the sources say nothing "
-            "about it."
+            "The RESUME component. Exactly one entry for every criterion in "
+            "the rubric, in rubric order, scored from the resume text alone. "
+            "Every evidence quote here must be tagged 'resume' and must come "
+            "from the resume. Score every criterion even when the resume says "
+            "nothing about it; award 0 with no evidence where it does not."
         )
     )
     total_score: int = Field(
         description=(
-            "The sum of every points_awarded above. Add them up and state the "
-            "total exactly; it is checked."
+            "The sum of every points_awarded in the resume component above. "
+            "Add them up and state the total exactly; it is checked."
+        )
+    )
+    voice_sub_scores: list[SubScore] = Field(
+        description=(
+            "The VOICE component. The same rubric again, scored from the "
+            "spoken introduction alone, one entry per criterion in rubric "
+            "order. Every evidence quote here must be tagged 'introduction' "
+            "and must come from the transcript. This is where reasoning, "
+            "ownership and clarity of explanation earn points: a candidate "
+            "who describes a decision they made and why scores here even "
+            "where the resume only lists the tool. Award 0 with no evidence "
+            "where the introduction does not address a criterion."
+        )
+    )
+    voice_total_score: int = Field(
+        description=(
+            "The sum of every points_awarded in the voice component above. "
+            "Add them up and state the total exactly; it is checked."
         )
     )
     matched_skills: list[str] = Field(
@@ -771,6 +832,15 @@ class PublicJobSummary(BaseModel):
     workplace_type: str | None = None
     employment_type: str | None = None
     compensation: str | None = None
+    # Whether the caller has already applied, answered only when they say
+    # who they are. False for an anonymous browse, which is honest: nobody
+    # has applied as nobody.
+    #
+    # It is a property of the request, not of the job, and it is the same
+    # fact the unique constraint on (job_id, email) enforces at insert
+    # time. Explore reads it so the portal cannot drift from what applying
+    # would actually do.
+    applied: bool = False
 
 
 class CandidateCreated(BaseModel):
@@ -820,6 +890,11 @@ class CandidateSummary(BaseModel):
     interview_status: str | None = None
     interview_score: int | None = None
     interview_band: str | None = None
+    # Which role this applicant is for. Redundant on Job Detail, which
+    # already knows, and the whole point of the cross-role directory, which
+    # would otherwise have to fetch each job separately to label a row.
+    job_id: str | None = None
+    job_title: str | None = None
 
 
 class CandidateDetail(BaseModel):
@@ -836,7 +911,13 @@ class CandidateDetail(BaseModel):
     screening_score: int | None
     screening_band: str | None
     recommendation: str | None
+    # The two components behind screening_score, each a full 0-100 scoring
+    # of the same rubric. Null on rows screened before the split, which the
+    # screen renders as "not recorded" rather than as zero.
+    resume_score: int | None = None
+    voice_score: int | None = None
     sub_scores: list[SubScoreOut]
+    voice_sub_scores: list[SubScoreOut] = []
     matched_skills: list[str]
     unevidenced_skills: list[str]
     resume_intro_conflicts: list[str]

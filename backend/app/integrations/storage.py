@@ -270,7 +270,10 @@ def save_screening(
     *,
     score: int,
     band: str,
+    resume_score: int,
+    voice_score: int,
     sub_scores: list[dict[str, Any]],
+    voice_sub_scores: list[dict[str, Any]],
     matched_skills: list[str],
     unevidenced_skills: list[str],
     conflicts: list[str],
@@ -282,9 +285,15 @@ def save_screening(
         .table("candidates")
         .update(
             {
+                # The weighted result, and the two components behind it.
+                # Written together so a row can never carry a total whose
+                # parts are missing (database/003_screening_components.sql).
                 "screening_score": score,
                 "screening_band": band,
+                "resume_score": resume_score,
+                "voice_score": voice_score,
                 "sub_scores": sub_scores,
+                "voice_sub_scores": voice_sub_scores,
                 "matched_skills": matched_skills,
                 "unevidenced_skills": unevidenced_skills,
                 "resume_intro_conflicts": conflicts,
@@ -326,14 +335,53 @@ def get_candidate(candidate_id: str) -> dict[str, Any] | None:
     return response.data[0] if response.data else None
 
 
+# Everything a list row needs, and nothing else.
+#
+# `select("*")` on this table is expensive in a way that is invisible
+# locally: a candidate row carries resume_text, transcript, assessment and
+# the sub_scores jsonb, which together run to tens of kilobytes each. A
+# list of twenty applicants was pulling most of a megabyte over the wire
+# from Supabase to render name, score and state.
+#
+# Anything added here must be a column `_summary` in api/candidates.py
+# actually reads. The demo store ignores projection and returns whole rows,
+# so a field missing from this list still works in DEMO_MODE and fails
+# against Supabase. That asymmetry is the reason to keep the list tight and
+# the reason to keep it in one place.
+CANDIDATE_SUMMARY_COLUMNS = (
+    "id, job_id, name, email, state, created_at, "
+    "screening_score, screening_band, recommendation, matched_skills"
+)
+
+
 def list_candidates(job_id: str) -> list[dict[str, Any]]:
     """Ranked by score, highest first. Candidates still being screened
     have a null score and sort last."""
     response = (
         get_client()
         .table("candidates")
-        .select("*")
+        .select(CANDIDATE_SUMMARY_COLUMNS)
         .eq("job_id", job_id)
+        .order("screening_score", desc=True, nullsfirst=False)
+        .execute()
+    )
+    return response.data or []
+
+
+def list_candidates_for_jobs(job_ids: list[str]) -> list[dict[str, Any]]:
+    """Summary rows for several jobs at once, ranked by score.
+
+    The cross-role directory used to fetch one job at a time from the
+    browser: with six roles that was six requests, each doing four queries
+    of its own. This is one.
+    """
+    if not job_ids:
+        return []
+    response = (
+        get_client()
+        .table("candidates")
+        .select(CANDIDATE_SUMMARY_COLUMNS)
+        .in_("job_id", job_ids)
         .order("screening_score", desc=True, nullsfirst=False)
         .execute()
     )
@@ -355,7 +403,7 @@ def interview_summaries(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
     interviews = (
         get_client()
         .table("interviews")
-        .select("*")
+        .select("id, candidate_id, status")
         .in_("candidate_id", candidate_ids)
         .execute()
         .data
@@ -364,10 +412,12 @@ def interview_summaries(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
     if not interviews:
         return {}
 
+    # Not `*`: an interview_result carries strengths, concerns and the
+    # per-dimension breakdown, none of which a list row shows.
     results = (
         get_client()
         .table("interview_results")
-        .select("*")
+        .select("interview_id, overall_score, band")
         .in_("interview_id", [i["id"] for i in interviews])
         .execute()
         .data
@@ -386,18 +436,59 @@ def interview_summaries(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
     return summaries
 
 
+def job_titles(job_ids: list[str]) -> dict[str, str]:
+    """Titles keyed by job id, in one query.
+
+    For screens that list rows from several jobs and need nothing about the
+    job but its name. Fetching whole job rows here would pull the rubric
+    jsonb and the full description for each one.
+    """
+    if not job_ids:
+        return {}
+    response = (
+        get_client()
+        .table("jobs")
+        .select("id, title")
+        .in_("id", list(set(job_ids)))
+        .execute()
+    )
+    return {row["id"]: row.get("title") or "" for row in response.data or []}
+
+
+def invitations_by_candidate(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Interview status, token and invite time, keyed by candidate id.
+
+    The candidate portal needs all three per application, and used to make
+    one round trip per row to get them.
+    """
+    if not candidate_ids:
+        return {}
+    response = (
+        get_client()
+        .table("interviews")
+        .select("candidate_id, status, token, invited_at")
+        .in_("candidate_id", candidate_ids)
+        .execute()
+    )
+    return {row["candidate_id"]: row for row in response.data or []}
+
+
 def list_candidates_by_email(email: str) -> list[dict[str, Any]]:
     """Every application from one email address, newest first.
 
     Used only by the candidate portal, which looks a person up by the
-    address they applied with. Returns whole rows, so the caller is
-    responsible for exposing only what a candidate may see: the row carries
-    scores and the assessment.
+    address they applied with.
+
+    Four columns, and none of them is a score. The route is already written
+    field by field from a whitelist so a score cannot reach a candidate;
+    projecting here means the score is not even in the process memory that
+    builds that response. Belt and braces on the one rule this side of the
+    product must not break (product.md section 2).
     """
     response = (
         get_client()
         .table("candidates")
-        .select("*")
+        .select("id, job_id, state, created_at")
         .eq("email", email)
         .order("created_at", desc=True)
         .execute()
@@ -409,12 +500,13 @@ def list_all_candidates() -> list[dict[str, Any]]:
     """Every candidate, newest first.
 
     Only used by the candidate portal's demo fallback. Not owner scoped,
-    which is exactly why it has no other caller.
+    which is exactly why it has no other caller, and why it projects the
+    same score-free columns as the lookup it stands in for.
     """
     response = (
         get_client()
         .table("candidates")
-        .select("*")
+        .select("id, job_id, state, created_at")
         .order("created_at", desc=True)
         .execute()
     )

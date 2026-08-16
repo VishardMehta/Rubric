@@ -15,9 +15,13 @@ interface DirectoryRow extends CandidateSummary {
 }
 
 /**
- * A useful cross-role view, built from the existing job and per-job candidate
- * APIs. It deliberately does not invent a second aggregate backend contract
- * just to paint a navigation item.
+ * A cross-role view of every applicant.
+ *
+ * This was built by listing the jobs and then fanning out over
+ * `listCandidates`, one request per role, each running four queries of its
+ * own. It read as a small amount of client-side glue and behaved like a
+ * page that took several seconds to appear. `GET /api/candidates` returns
+ * the same rows in one request, already labelled with their role.
  */
 export function HiringDirectoryPage({ mode }: { mode: DirectoryMode }) {
   const [rows, setRows] = useState<DirectoryRow[] | null>(null);
@@ -26,19 +30,13 @@ export function HiringDirectoryPage({ mode }: { mode: DirectoryMode }) {
 
   useEffect(() => {
     let cancelled = false;
-    api.listJobs()
-      .then(async (jobs) => {
-        const grouped = await Promise.all(
-          jobs.map(async (job) => ({
-            job,
-            candidates: await api.listCandidates(job.id),
-          })),
-        );
+    api.listAllCandidates()
+      .then((candidates) => {
         if (cancelled) return;
-        setRows(grouped.flatMap(({ job, candidates }) => candidates.map((candidate) => ({
+        setRows(candidates.map((candidate) => ({
           ...candidate,
-          job: { id: job.id, title: job.title },
-        }))));
+          job: { id: candidate.job_id ?? "", title: candidate.job_title ?? "" },
+        })));
       })
       .catch((cause) => !cancelled && setFailure(cause));
     return () => { cancelled = true; };
@@ -79,6 +77,13 @@ export function HiringDirectoryPage({ mode }: { mode: DirectoryMode }) {
             />
           ) : (
             <div className="rb-directory__list">
+              <div className="rb-directory__head" aria-hidden="true">
+                <span>Candidate</span>
+                <span>Role</span>
+                <span>Score</span>
+                <span>Status</span>
+                <span>Action</span>
+              </div>
               {filteredRows.map((row) => <DirectoryRowCard key={row.id} row={row} mode={mode} />)}
             </div>
           )}

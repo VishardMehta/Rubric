@@ -10,7 +10,8 @@
 
 .rb-interview {
   min-height: 100vh;
-  min-height: 100dvh; /* keeps the control clear of mobile browser chrome */
+  min-height: 100dvh;
+  /* keeps the control clear of mobile browser chrome */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,9 +19,19 @@
   padding: var(--space-10) var(--layout-gutter-compact);
 }
 
+/*
+ * Wider than the rest of the candidate side.
+ *
+ * Everything else a candidate sees is prose in a 640px column, which is a
+ * reading measure. The question is not read at a reading measure: it is one
+ * sentence at display size, and 640px broke it over four or five lines when
+ * three would do. The blocks below it are capped individually rather than
+ * inheriting this, because the composition should get wider, not everything
+ * in it.
+ */
 .rb-interview__inner {
   width: 100%;
-  max-width: var(--layout-candidate-content-max);
+  max-width: 940px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -33,6 +44,7 @@
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -66,11 +78,39 @@
   margin-top: var(--space-10);
 }
 
+/* The pre-interview camera check. Wide enough to frame a face, small
+   enough that the orb and the start control stay above the fold. */
+.rb-interview__ready-check {
+  display: flex;
+  width: min(100%, 320px);
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.rb-interview__ready-check .rb-camera {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.rb-interview__ready-status {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line-height);
+  text-align: center;
+}
+
+/* Caution, not danger: the candidate can fix this, and the screen says
+   how. Nothing has gone wrong yet. */
+.rb-interview__ready-status--blocked { color: var(--color-caution); }
+
 .rb-interview__ready-orb {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 144px;
+  height: 120px;
   margin: var(--space-2) 0 calc(var(--space-2) * -1);
 }
 
@@ -120,7 +160,7 @@
  */
 .rb-interview__question-frame {
   width: 100%;
-  height: 208px;
+  height: clamp(168px, 22vh, 208px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -168,6 +208,7 @@
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -188,23 +229,74 @@
  */
 
 .rb-interview__presence {
-  display: grid;
-  grid-template-columns: 230px 1fr;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-6);
+  position: relative;
+  display: block;
   width: 100%;
-  height: 280px;
+  /* Narrower than the question above it, and about a fifth larger than it
+     was in both directions. The orb had no clear air around it at the old
+     size. The height stays a vh clamp so a short laptop screen still keeps
+     the meter and the control above the fold. */
+  max-width: 756px;
+  height: clamp(308px, 36vh, 361px);
   margin-top: var(--space-2);
+  padding: var(--space-3);
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.rb-interview__presence>.rb-camera {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-3);
+  bottom: var(--space-3);
+  left: var(--space-3);
+  width: calc(50% - var(--space-5));
+  height: auto;
+  transition:
+    top 720ms cubic-bezier(.2, .8, .2, 1),
+    bottom 720ms cubic-bezier(.2, .8, .2, 1),
+    left 720ms cubic-bezier(.2, .8, .2, 1),
+    width 720ms cubic-bezier(.2, .8, .2, 1),
+    height 720ms cubic-bezier(.2, .8, .2, 1),
+    border-radius 720ms cubic-bezier(.2, .8, .2, 1),
+    box-shadow 720ms cubic-bezier(.2, .8, .2, 1);
 }
 
 .rb-interview__orb {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
+  width: 50%;
   justify-content: center;
   align-items: center;
   /* Fixed, not min-height. Together with the question frame above it, this
      is what keeps the whole composition still between questions. */
-  height: 280px;
+  height: 100%;
+  transition: right 720ms cubic-bezier(.2, .8, .2, 1);
+}
+
+/* The camera begins as an equal framing aid. Once the candidate has had
+   five seconds to position themselves, it contracts into a quiet live
+   picture-in-picture and the orb moves to the visual centre. */
+/* Scaled with the panel so the settled picture-in-picture keeps the same
+   relationship to it, and stays clear of the orb's new centre. */
+.rb-interview__presence--camera-settled>.rb-camera {
+  top: var(--space-3);
+  bottom: auto;
+  left: calc(100% - 128px);
+  width: 112px;
+  height: 84px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.rb-interview__presence--camera-settled .rb-interview__orb {
+  right: 25%;
 }
 
 /* The canvas itself already follows real audio and speech events. This
@@ -237,12 +329,12 @@
   margin-top: var(--space-8);
   width: 100%;
   max-width: 320px;
-  min-height: 176px;
+  min-height: 132px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-16);
+  gap: var(--space-8);
 }
 
 /* Meter, timer and caption move together as one unit. */
@@ -296,78 +388,116 @@
   gap: var(--space-5);
 }
 
-/* --- Compact -------------------------------------------------------------
+/* --- Short viewports -----------------------------------------------------
+ * A 1280x720 laptop is short, not narrow, so the width rules above are all
+ * correct there and the height ones are not: the control was falling below
+ * the fold and the page scrolled. Nothing on this screen may require a
+ * scroll, because the candidate is mid-answer and the button they need is
+ * the one that goes off screen.
+ *
+ * Only the vertical rhythm gives way. The question keeps its size and its
+ * new width; the frame and the panel give back the space instead.
+ */
+@media (min-width: 768px) and (max-height: 820px) {
+  .rb-interview {
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+
+  .rb-interview__question-frame {
+    height: clamp(132px, 20vh, 168px);
+    margin-top: var(--space-5);
+  }
+
+  .rb-interview__presence {
+    height: clamp(308px, 36vh, 361px);
+
+    .rb-interview__control {
+      margin-top: var(--space-6);
+    }
+  }
+
+  /* --- Compact -------------------------------------------------------------
  * screens.md section 7: at 375px the question drops to title-1, the
  * control becomes full width, and the meter narrows. Everything else is
  * unchanged.
  */
 
-@media (max-width: 767px) {
-  .rb-interview {
-    padding: var(--space-8) var(--layout-gutter-compact);
-  }
+  @media (max-width: 767px) {
+    .rb-interview {
+      padding: var(--space-8) var(--layout-gutter-compact);
+    }
 
-  .rb-interview__question-frame {
-    height: 168px;
-    margin-top: var(--space-5);
-  }
+    .rb-interview__question-frame {
+      height: 168px;
+      margin-top: var(--space-5);
+    }
 
-  .rb-interview__question {
-    font-size: var(--text-title-1-size);
-    line-height: var(--text-title-1-line-height);
-    letter-spacing: var(--text-title-1-letter-spacing);
-  }
+    .rb-interview__question {
+      font-size: var(--text-title-1-size);
+      line-height: var(--text-title-1-line-height);
+      letter-spacing: var(--text-title-1-letter-spacing);
+    }
 
-  .rb-interview__question--long,
-  .rb-interview__question--longest {
-    font-size: var(--text-title-2-size);
-    line-height: var(--text-title-2-line-height);
-    letter-spacing: var(--text-title-2-letter-spacing);
-  }
+    .rb-interview__question--long,
+    .rb-interview__question--longest {
+      font-size: var(--text-title-2-size);
+      line-height: var(--text-title-2-line-height);
+      letter-spacing: var(--text-title-2-letter-spacing);
+    }
 
-  .rb-interview__control {
-    margin-top: var(--space-6);
-    max-width: none;
-  }
+    .rb-interview__control {
+      margin-top: var(--space-6);
+      max-width: none;
+    }
 
-  /* The orb narrows at 375px so the question and the control still fit
+    /* The orb narrows at 375px so the question and the control still fit
      above the fold on a phone. */
-  .rb-interview__presence {
-    grid-template-columns: 1fr;
-    gap: 0;
-    height: 340px;
-    margin-top: 0;
+    .rb-interview__presence {
+      height: 308px;
+      padding: var(--space-2);
+      margin-top: 0;
+    }
+
+    .rb-interview__orb {
+      height: auto;
+    }
+
+    .rb-interview__presence>.rb-camera {
+      top: var(--space-2);
+      bottom: var(--space-2);
+      left: var(--space-2);
+      width: calc(50% - var(--space-3));
+    }
+
+    .rb-interview__presence--camera-settled>.rb-camera {
+      top: var(--space-2);
+      bottom: auto;
+      left: calc(100% - 88px);
+      width: 76px;
+      height: 57px;
+    }
   }
 
-  .rb-interview__orb {
-    height: 160px;
-  }
-
-  .rb-camera {
-    width: 180px;
-    height: 136px;
-  }
-}
-
-/* --- Interview complete --------------------------------------------------
+  /* --- Interview complete --------------------------------------------------
  * screens.md section 8. Centered, quiet, and offering nothing to click.
  */
 
-.rb-interview-done {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--space-4);
-}
+  .rb-interview-done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--space-4);
+  }
 
-.rb-interview-done__title {
-  margin: 0 0 var(--space-2);
-}
+  .rb-interview-done__title {
+    margin: 0 0 var(--space-2);
+  }
 
-.rb-interview-done__body {
-  margin: 0;
-  max-width: 44ch;
-  color: var(--color-ink-secondary);
-  font-variant-numeric: normal;
-}
+  .rb-interview-done__body {
+    margin: 0;
+    max-width: 44ch;
+    color: var(--color-ink-secondary);
+    font-variant-numeric: normal;
+  }

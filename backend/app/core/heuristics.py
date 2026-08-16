@@ -20,6 +20,20 @@ BAND_BORDERLINE_MIN = 45
 # --- Rubric generation -------------------------------------------------
 # backend.md 5.1
 
+# The two screening components. The rubric is scored twice, once from the
+# resume and once from the spoken introduction, and these weight the two
+# 0-100 results into the final screening score.
+#
+# The resume leads because it is the denser evidence: dates, employers,
+# tools and shipped work. The introduction is weighted heavily enough to
+# matter on its own, because it is the only source that shows reasoning
+# and ownership, and a candidate who cannot describe what they built
+# should not screen well on a well-written CV alone.
+#
+# These must sum to 1.0; scoring.py asserts it.
+SCREENING_RESUME_WEIGHT = 0.60
+SCREENING_VOICE_WEIGHT = 0.40
+
 RUBRIC_MIN_CRITERIA = 4
 RUBRIC_MAX_CRITERIA = 7
 RUBRIC_TOTAL_POINTS = 100
@@ -28,10 +42,50 @@ RUBRIC_GENERATION_MAX_RETRIES = 1
 # --- Interview plan ----------------------------------------------------
 # backend.md 5.3, product.md section 6
 
-PLAN_MIN_QUESTIONS = 5
-PLAN_MAX_QUESTIONS = 10
-PLAN_FIXED_OPENING_SLOTS = 3  # background, projects, personal contribution
+# Every interview is the same length. It used to scale with rubric breadth,
+# which made two candidates for different roles incomparable on interview
+# length alone and gave a narrow rubric a 6 question interview.
+PLAN_TOTAL_QUESTIONS = 10
+
+# Slot 1 is the fixed self-introduction; slot 2 is a project from their
+# resume. Two, not three: the old third opener always asked "what was your
+# contribution to that project", which is a forced follow-up to slot 2 and
+# the exact shape the interview is supposed to avoid.
+PLAN_FIXED_OPENING_SLOTS = 2
 PLAN_MIN_SLOT_FOR_DEEP_DEPTH = 4  # no "deep" question before this slot
+
+# The mix, over the whole interview. Minimums are counted across all ten
+# slots, openers included: slot 1 is an experience question and slot 2 is a
+# resume question.
+#
+# Without a floor per kind the planner writes ten technical questions for a
+# technical rubric, which tests one facet of a person ten times.
+#
+# Six or seven slots are planned from the resume, the job and the rubric
+# before the interview starts; the remaining three or four are written
+# live from what the candidate actually just said.
+#
+# The floor on follow-ups is as load-bearing as the ceiling. Without it the
+# planner writes ten prepared questions and the interview is a
+# questionnaire that happens to know your CV. Without the ceiling every
+# slot chains to the previous answer and the interview drifts wherever the
+# first answer pointed.
+PLAN_KIND_MINIMUMS = {"resume": 2, "technical": 2, "experience": 2}
+PLAN_MIN_FOLLOWUP_SLOTS = 3
+PLAN_MAX_FOLLOWUP_SLOTS = 4
+PLAN_MAX_CONSECUTIVE_SAME_KIND = 2
+
+# How much of the resume and the job description the planner is shown.
+# Enough to name real projects and real requirements; not so much that the
+# plan call becomes the slowest thing in the interview. Trimmed from the
+# tail, which on a resume is references and formatting.
+PLAN_RESUME_EXCERPT_CHARS = 4000
+PLAN_JOB_EXCERPT_CHARS = 2000
+
+# Resume anchors offered to each mid-interview turn, most relevant first.
+# The turn prompt already carries the rubric, the state and the answer, so
+# this is a short list rather than the whole document.
+TURN_RESUME_ANCHOR_CAP = 8
 
 # --- Interview state -----------------------------------------------------
 # backend.md section 6

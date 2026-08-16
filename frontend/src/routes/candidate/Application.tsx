@@ -8,7 +8,8 @@ import type { AudioRecording } from "../../hooks/useAudioRecorder";
 import { api, ApiError, submitApplicationStreaming } from "../../api/client";
 import type { ApplicationStage, PublicJobSummary } from "../../api/client";
 import "./application.css";
-import { rememberEmail } from "../../lib/candidate-applications";
+import { signInCandidate } from "../../lib/candidate-session";
+import type { CandidateSession } from "../../lib/candidate-session";
 
 /*
  * screens.md section 6. A stranger's first contact with the product.
@@ -40,7 +41,7 @@ const UPLOAD_LABEL = "Uploading";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function ApplicationPage() {
+export function ApplicationPage({ session }: { session: CandidateSession }) {
   const { jobId = "" } = useParams();
   const navigate = useNavigate();
 
@@ -48,10 +49,13 @@ export function ApplicationPage() {
   const [job, setJob] = useState<PublicJobSummary | null>(null);
   const [loadFailure, setLoadFailure] = useState<ApiError | null>(null);
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState(session.name ?? "");
+  // Fixed to the signed-in address, not merely prefilled. The portal looks
+  // applications up by it, so an application sent under a different address
+  // would land somewhere its author cannot see. Changing it is a sign out,
+  // which is a decision, rather than an edit to a field.
+  const email = session.email;
   const [nameTouched, setNameTouched] = useState(false);
-  const [emailTouched, setEmailTouched] = useState(false);
 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeServerError, setResumeServerError] = useState<string | null>(null);
@@ -81,13 +85,6 @@ export function ApplicationPage() {
   }, [jobId]);
 
   const nameError = nameTouched && name.trim().length === 0 ? "Enter your name." : undefined;
-  const emailError = !emailTouched
-    ? undefined
-    : email.trim().length === 0
-      ? "Enter your email address."
-      : !EMAIL_PATTERN.test(email.trim())
-        ? "Enter a valid email address."
-        : undefined;
 
   const canSubmit = useMemo(
     () =>
@@ -108,7 +105,6 @@ export function ApplicationPage() {
     async (event: React.FormEvent) => {
       event.preventDefault();
       setNameTouched(true);
-      setEmailTouched(true);
       if (!canSubmit || !resumeFile || !recording) return;
 
       setSubmitError(null);
@@ -119,13 +115,12 @@ export function ApplicationPage() {
       try {
         const created = await submitApplicationStreaming(
           jobId,
-          { name: name.trim(), email: email.trim(), resume: resumeFile, audio: recording.blob },
+          { name: name.trim(), email, resume: resumeFile, audio: recording.blob },
           (stage) => setStageLabel(STAGE_LABELS[stage]),
         );
-        // The portal looks applications up by this address, so remembering
-        // it is what lets a returning candidate see their status without
-        // typing it again. It is a convenience, not a credential.
-        rememberEmail(email.trim());
+        // Carries the name back into the session, so the portal can greet
+        // someone who signed in with an address and nothing else.
+        signInCandidate(email, name.trim());
         navigate(`/apply/${jobId}/done`, { replace: true, state: { jobTitle: created.job_title } });
       } catch (cause) {
         if (cause instanceof ApiError && RESUME_ERROR_CODES.has(cause.code)) {
@@ -195,10 +190,8 @@ export function ApplicationPage() {
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            onBlur={() => setEmailTouched(true)}
-            error={emailError}
-            disabled={submitting}
+            readOnly
+            help="You are signed in with this address. Your application appears under it in My applications."
           />
         </div>
 
@@ -224,10 +217,14 @@ export function ApplicationPage() {
             <p className="text-label rb-apply__section-label">03 · Your introduction</p>
             <h2 className="text-title-3 rb-apply__label">Voice introduction</h2>
           </div>
+          {/* Weighted at 40% of the screening score, against the same
+              rubric as the resume, so the brief has to say what earns
+              points rather than "tell us about yourself". */}
           <p className="text-body-lg rb-apply__voice-copy">
-            Tell us who you are, what you have worked on, and what you built.
-            About two minutes is plenty. Your resume covers where you worked;
-            this covers how you think.
+            <strong>About two minutes.</strong> Cover the experience, projects
+            and skills that matter for this role: what you built, the decisions
+            you made and why, and anything about you the resume does not show.
+            Detailed but concise is what counts here, not length.
           </p>
           <VoiceRecorder onChange={setRecording} disabled={submitting} />
         </div>

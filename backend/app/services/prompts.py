@@ -13,10 +13,16 @@ positively and give an example of it.
 from __future__ import annotations
 
 from app.core.heuristics import (
-    PLAN_FIXED_OPENING_SLOTS,
+    PLAN_JOB_EXCERPT_CHARS,
+    PLAN_KIND_MINIMUMS,
+    PLAN_MAX_CONSECUTIVE_SAME_KIND,
+    PLAN_MAX_FOLLOWUP_SLOTS,
+    PLAN_MIN_FOLLOWUP_SLOTS,
+    PLAN_RESUME_EXCERPT_CHARS,
     RUBRIC_MAX_CRITERIA,
     RUBRIC_MIN_CRITERIA,
     RUBRIC_TOTAL_POINTS,
+    TURN_RESUME_ANCHOR_CAP,
 )
 
 # ---------------------------------------------------------------------
@@ -107,16 +113,28 @@ a transcript of the candidate speaking about their own work, and the text \
 of their resume. You score the candidate against those criteria and nothing \
 else.
 
-Work criterion by criterion, in rubric order, and score every criterion \
-even when the sources say nothing about it.
+You score the rubric twice: once from the resume alone, then again from \
+the introduction alone. Each pass is a complete scoring, criterion by \
+criterion in rubric order, and each produces its own total out of the \
+rubric's 100 points. The two are combined afterwards, outside your answer, \
+so do not try to balance them against each other or carry a number from \
+one into the other.
 
-For each criterion, first find the evidence, then decide the points. Read \
-both sources for spans that show what that criterion's description asks \
-for. Copy each span word for word and tag which source it came from. The \
-quotes are checked against the originals, so copy rather than paraphrase, \
-and tag the source accurately. Once you have the evidence in front of you, \
-award the points it supports. When neither source shows anything for a \
-criterion, record no evidence and award 0.
+Score the resume component first. Then score the voice component, using \
+only the transcript, and judge it on its own terms: what they say they \
+did, the decisions they describe making, the problems they say they hit \
+and how they resolved them, and how clearly they explain any of it. A \
+candidate who walks through a design decision and its tradeoff earns \
+points here even where the resume only lists the tool.
+
+For each criterion in each pass, first find the evidence, then decide the \
+points. Copy each span word for word from that pass's own source. Quotes \
+in the resume component are tagged 'resume' and must appear in the resume; \
+quotes in the voice component are tagged 'introduction' and must appear in \
+the transcript. They are checked against the originals, so copy rather \
+than paraphrase. Once the evidence is in front of you, award the points it \
+supports. Where that source shows nothing for a criterion, record no \
+evidence and award 0.
 
 Award points for demonstrated work: systems built and run, decisions the \
 candidate made and why, problems hit and how they were handled, scale and \
@@ -124,22 +142,24 @@ constraints they worked within. Where a candidate names a technology \
 without saying what they did with it, that is worth a little; where they \
 describe owning and shipping something with it, that is worth much more.
 
-Use both sources for what each is good for. The resume carries structured \
-facts, such as employers, dates, titles and tools. The introduction carries \
+Use each source for what it is good for. The resume carries structured \
+facts: employers, dates, titles and tools. The introduction carries \
 reasoning, ownership and how clearly the person explains their work. A \
-claim that appears in both is better evidenced than one that appears in \
-only one.
+sparse resume with a strong introduction and a dense resume with a thin \
+introduction are different candidates, and scoring the two separately is \
+what keeps them distinguishable.
 
 Where the two sources disagree on a checkable fact, record it as a \
 difference in neutral wording that states both versions. Report it and let \
 the hiring team judge it. Differences do not change any score.
 
-Add your points up and state the total exactly. The total is checked \
-against the sum.
+Add each component's points up and state that component's total exactly. \
+Both totals are checked against their own sums.
 
 Write the assessment for a hiring manager who has not read either source. \
-Name the criteria, say what the evidence showed, and say plainly where the \
-sources were thin. Describe what was evidenced rather than predicting how \
+Name the criteria, say what the evidence showed, and say plainly where \
+each source was thin. Where the two components differ markedly, say so and \
+say which way. Describe what was evidenced rather than predicting how \
 the person would perform.\
 """
 
@@ -200,26 +220,54 @@ def _rubric_block(rubric) -> str:
 # Stage 3: interview plan. backend.md 5.3
 # ---------------------------------------------------------------------
 
+_KIND_MINIMUM_SENTENCE = ", ".join(
+    f"at least {count} '{kind}'" for kind, count in PLAN_KIND_MINIMUMS.items()
+)
+
 PLAN_SYSTEM = f"""\
-You plan voice interviews. Given a rubric and how the candidate scored on \
-their written application, you decide what each question in the interview \
-should be for.
+You plan voice interviews. Given the role, the rubric, the candidate's \
+resume and how they scored on their written application, you decide what \
+each question in the interview should be for.
 
 You are planning intent, not wording. The actual question text is written \
 later, at the moment it is asked, using what the candidate has said by \
 then. Your job is to make sure the interview covers the right ground in a \
 sensible order.
 
-The first {PLAN_FIXED_OPENING_SLOTS} slots are fixed openers and must be \
-planned in this order: slot 1 asks the candidate to introduce themselves \
-and their background, slot 2 asks about a project they worked on, slot 3 \
-asks what their own contribution to that project was. Give all three the \
-depth 'opening'.
+Slot 1 is fixed: the candidate introduces themselves. Kind 'experience', \
+depth 'opening'. Slot 2 asks about one specific project named on their \
+resume: kind 'resume', depth 'opening', and put the project's own name in \
+the anchor field.
 
 Plan the remaining slots so every rubric criterion is probed at least once \
 across the whole interview. Spend the spare slots where the screening \
 evidence was thinnest: a criterion the application barely evidenced is \
 worth more interview time than one already well established.
+
+Vary the kind of question. Across the whole interview use \
+{_KIND_MINIMUM_SENTENCE}, and between {PLAN_MIN_FOLLOWUP_SLOTS} and \
+{PLAN_MAX_FOLLOWUP_SLOTS} 'followup' slots. Both ends of that follow-up \
+range are required: fewer and the interview is a prepared list that ignores \
+what the candidate says, more and it becomes one long thread about whatever \
+they happened to mention first. Count your slots before you answer.
+
+Never put more than {PLAN_MAX_CONSECUTIVE_SAME_KIND} slots of the same kind \
+next to each other, and let depth build without ever dropping back. \
+Interleave the kinds so the interview moves between what they have built, \
+what they know, and how they work, rather than running a block of one and \
+then a block of another.
+
+Place each 'followup' after a slot whose answer is likely to be worth \
+pressing on: after a project they led, or a technical claim that invites a \
+"how". Slot 3 onward is fair game for one.
+
+A workable shape, which you should adapt to this candidate rather than copy: \
+1 experience opener, 2 resume, 3 technical, 4 followup, 5 experience, \
+6 resume, 7 followup, 8 technical, 9 experience, 10 followup.
+
+Anchor 'resume' slots in things their resume actually names: a project, an \
+employer, a tool, a course, a competition. Copy the name as their resume \
+writes it. Never invent one.
 
 Let depth build. Use 'probing' for questions asking for specifics and \
 'deep' for questions pressing on tradeoffs, failure cases and decisions \
@@ -232,7 +280,65 @@ probed by the same question.\
 """
 
 
-def plan_prompts(rubric, screening: dict | None, total_questions: int) -> tuple[str, str]:
+def _plan_candidate_block(candidate: dict | None) -> str:
+    """What the planner is allowed to anchor a resume question to.
+
+    The planner used to see only the rubric and a column of numbers, which
+    is why its questions could not name anything. It cannot ask about the
+    forecasting project if nobody tells it there is one.
+
+    The resume text is truncated rather than sent whole: a plan needs the
+    shape of someone's history, and the tail of a long resume is references
+    and formatting.
+    """
+    if not candidate:
+        return "(no application on file)"
+
+    parts: list[str] = []
+
+    profile = candidate.get("resume_profile") or {}
+    if profile:
+        for entry in profile.get("experience") or []:
+            line = " - ".join(
+                str(v)
+                for v in (entry.get("role"), entry.get("organisation"), entry.get("period"))
+                if v
+            )
+            highlights = "; ".join(entry.get("highlights") or [])
+            parts.append(f"  work: {line}" + (f" ({highlights})" if highlights else ""))
+        for entry in profile.get("education") or []:
+            line = " - ".join(
+                str(v)
+                for v in (
+                    entry.get("qualification"),
+                    entry.get("field_of_study"),
+                    entry.get("institution"),
+                    entry.get("period"),
+                )
+                if v
+            )
+            parts.append(f"  education: {line}")
+        skills = ", ".join(profile.get("skills") or [])
+        if skills:
+            parts.append(f"  skills on resume: {skills}")
+
+    resume_text = (candidate.get("resume_text") or "").strip()
+    if resume_text:
+        parts.append("\nRESUME TEXT\n" + resume_text[:PLAN_RESUME_EXCERPT_CHARS])
+
+    intro = (candidate.get("transcript") or "").strip()
+    if intro:
+        parts.append("\nWHAT THEY SAID IN THEIR VOICE INTRODUCTION\n" + intro[:1200])
+
+    return "\n".join(parts) if parts else "(no application on file)"
+
+
+def plan_prompts(
+    rubric,
+    screening: dict | None,
+    total_questions: int,
+    job: dict | None = None,
+) -> tuple[str, str]:
     """System and user prompt for stage 3."""
     if screening:
         thin = [
@@ -240,20 +346,40 @@ def plan_prompts(rubric, screening: dict | None, total_questions: int) -> tuple[
             f"{s.get('points_awarded')} of {s.get('points_possible')}"
             for s in (screening.get("sub_scores") or [])
         ]
+        matched = ", ".join(screening.get("matched_skills") or []) or "none"
+        unevidenced = ", ".join(screening.get("unevidenced_skills") or []) or "none"
         screening_block = (
             f"Application score: {screening.get('screening_score')} out of 100\n"
             + "Per criterion:\n"
             + "\n".join(thin)
+            + f"\nSkills their application evidenced: {matched}"
+            + f"\nSkills the role asks for that it did not evidence: {unevidenced}"
         )
     else:
         screening_block = "(no screening result available)"
+
+    if job:
+        job_block = (
+            f"Title: {job.get('title') or '(untitled)'}\n"
+            + (f"Experience sought: {job.get('experience')}\n" if job.get("experience") else "")
+            + (f"Skills sought: {', '.join(job.get('skills') or [])}\n" if job.get("skills") else "")
+            + (job.get("description") or "")[:PLAN_JOB_EXCERPT_CHARS]
+        )
+    else:
+        job_block = "(no job description available)"
 
     user = f"""\
 Plan an interview of exactly {total_questions} questions, numbered 1 to \
 {total_questions}.
 
+THE ROLE
+{job_block}
+
 RUBRIC
 {_rubric_block(rubric)}
+
+THIS CANDIDATE
+{_plan_candidate_block(screening)}
 
 HOW THIS CANDIDATE SCORED ON THEIR APPLICATION
 {screening_block}\
@@ -282,23 +408,97 @@ Note what you learned. Record the topics the answer covered, and any \
 specific claims worth returning to later. Prefer concrete claims that \
 could be probed for detail over general statements of preference.
 
-Then write the next question, informed by how the answer went. Where the \
-answer was thin on the criterion it targeted, press on that. Where it was \
-strong, move on to new ground. Ask about the criteria the next slot \
-targets.
+Then write the next question. The slot you are writing for states its \
+kind, and the kind decides what the question is built from:
 
-Anchor the question in what the candidate actually said whenever you can. \
-If they mentioned building something specific, ask about a concrete \
-difficulty inside that thing: "How did you handle the cold start problem \
-in that recommender?" rather than "Tell me about your experience with \
-system design." Anchoring is what makes the interview feel like it is \
-listening.
+- 'followup': build directly on the answer you have just this moment \
+scored. Take one concrete thing from it - a system they named, a number \
+they gave, a decision they described, a problem they hit - and ask for the \
+detail behind that specific thing. Say the thing back to them in the \
+question so it is obvious you were listening: "You dropped the old index \
+after the planner picked up the new one - how did you check nothing \
+regressed?" is a follow-up; "Can you tell me more about your experience \
+with databases?" is not, and neither is anything that would still make \
+sense if the candidate had said something else entirely. Copy the claim \
+you built on into anchored_on_claim. This is the only kind that continues \
+the previous thread.
 
-Ask one question, phrased directly to the candidate, under 30 words. Ask \
-about ground not yet covered, and never re-ask something already answered. \
-The candidate hears this question spoken aloud, so keep it plain enough to \
-follow by ear the first time.\
+If the answer you just scored genuinely contains nothing concrete, do not \
+manufacture a follow-up out of nothing: ask about the criteria this slot \
+targets, anchored instead in something from their resume below, and leave \
+anchored_on_claim null.
+- 'resume': ask about the project, employer or skill named in the slot's \
+anchor. Name it in the question, the way their resume names it, so it is \
+plainly about them. If the anchor is empty, pick something concrete from \
+the resume detail supplied below.
+- 'technical': ask about a skill the role needs, on its own terms. Do not \
+tie it to the previous answer. It is a new question about what they know, \
+and a candidate who just described a project should now be asked something \
+that stands apart from it.
+- 'experience': ask how they worked. A decision and why they made it, a \
+tradeoff, a disagreement with someone, something that went wrong and what \
+they did about it.
+
+Change the subject when the kind says to. A question that opens "you \
+mentioned" belongs in a 'followup' slot and nowhere else. Three questions \
+in a row circling the same project is the failure this is written to \
+prevent, whatever the answers invite.
+
+Concrete beats general within every kind: "How did you handle the cold \
+start problem in that recommender?" rather than "Tell me about your \
+experience with system design."
+
+Keep it short. One question, phrased directly to the candidate, under 25 \
+words, one thing at a time. Name the project or the detail rather than \
+describing it at length: "In the Bosch diagnostic, how did you handle the \
+missing months?" not "You mentioned earlier that you worked on a project \
+called the Bosch diagnostic, and I was wondering whether you could \
+describe how you approached the situation where some of the data was \
+missing." Do not stack two questions into one sentence or add "and \
+why". Ask about ground not yet covered, never re-ask something already \
+answered, and do not return to a topic already discussed at length unless \
+this slot is a 'followup'. The candidate hears this question spoken aloud, \
+so keep it plain enough to follow by ear the first time.\
 """
+
+
+def _resume_anchor_block(candidate: dict | None) -> str:
+    """Concrete things from the resume a question may name.
+
+    Supplied every turn rather than only on 'resume' slots, because the
+    planner's anchor can be empty and a question that names nothing is the
+    generic question this whole design exists to avoid.
+    """
+    if not candidate:
+        return "  (none on file)"
+
+    profile = candidate.get("resume_profile") or {}
+    anchors: list[str] = []
+
+    for entry in profile.get("experience") or []:
+        label = " at ".join(
+            str(v) for v in (entry.get("role"), entry.get("organisation")) if v
+        )
+        if label:
+            anchors.append(label)
+        anchors.extend((entry.get("highlights") or [])[:2])
+
+    for entry in profile.get("education") or []:
+        if entry.get("institution"):
+            anchors.append(
+                " ".join(
+                    str(v)
+                    for v in (entry.get("qualification"), entry.get("institution"))
+                    if v
+                )
+            )
+
+    skills = profile.get("skills") or []
+    if skills:
+        anchors.append("skills listed: " + ", ".join(skills[:12]))
+
+    anchors = [a for a in anchors if a][:TURN_RESUME_ANCHOR_CAP]
+    return "\n".join(f"  - {a}" for a in anchors) or "  (none on file)"
 
 FINAL_TURN_SYSTEM = """\
 You are scoring the last answer of a voice interview.
@@ -319,7 +519,16 @@ The interview is over, so do not write another question.\
 def _state_block(state) -> str:
     covered = ", ".join(state.criteria_covered) or "none yet"
     remaining = ", ".join(state.criteria_remaining) or "none, all covered"
-    topics = ", ".join(state.topics_discussed) or "none yet"
+    # Named with their depth so a topic already gone over twice reads as
+    # exhausted rather than as available ground.
+    depth = getattr(state, "depth_by_topic", None) or {}
+    topics = (
+        ", ".join(
+            f"{t} (asked about {depth.get(t, 1)}x)" for t in state.topics_discussed
+        )
+        or "none yet"
+    )
+    worn = [t for t, n in depth.items() if n >= 2]
     claims = "\n".join(f"  - {c}" for c in state.claims_made) or "  (none yet)"
     asked = "\n".join(f"  {q['slot']}. {q['question']}" for q in state.questions_asked)
     return f"""\
@@ -335,6 +544,9 @@ CRITERIA NOT YET PROBED
 TOPICS DISCUSSED SO FAR
 {topics}
 
+TOPICS ALREADY COVERED ENOUGH, DO NOT RETURN TO THESE
+{", ".join(worn) or "none yet"}
+
 CLAIMS THE CANDIDATE HAS MADE
 {claims}\
 """
@@ -343,21 +555,29 @@ CLAIMS THE CANDIDATE HAS MADE
 def _slot_block(label: str, slot) -> str:
     if slot is None:
         return f"{label}\n  (none)"
-    return (
-        f"{label}\n"
-        f"  slot {slot.slot}, depth {slot.depth}\n"
-        f"  intent: {slot.intent}\n"
-        f"  criteria: {', '.join(slot.criterion_ids)}"
-    )
+    lines = [
+        label,
+        f"  slot {slot.slot}, kind {slot.kind}, depth {slot.depth}",
+        f"  intent: {slot.intent}",
+        f"  criteria: {', '.join(slot.criterion_ids)}",
+    ]
+    if getattr(slot, "anchor", None):
+        lines.append(f"  anchor: {slot.anchor}")
+    return "\n".join(lines)
 
 
-def turn_prompts(rubric, answered_slot, next_slot, state, answer: str) -> tuple[str, str]:
+def turn_prompts(
+    rubric, answered_slot, next_slot, state, answer: str, candidate: dict | None = None
+) -> tuple[str, str]:
     """System and user prompt for a mid-interview turn."""
     user = f"""\
 RUBRIC
 {_rubric_block(rubric)}
 
 {_state_block(state)}
+
+RESUME DETAIL YOU MAY NAME IN A QUESTION
+{_resume_anchor_block(candidate)}
 
 {_slot_block("THE QUESTION JUST ANSWERED", answered_slot)}
 

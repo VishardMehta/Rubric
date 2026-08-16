@@ -86,6 +86,7 @@ export function JobsPage({ view = "jobs" }: { view?: "overview" | "jobs" }) {
       {!failure && jobs && jobs.length > 0 && (
         <div className="rb-dashboard">
           {overview && <DashboardOverview {...overview} />}
+          {view === "overview" && overview && <OverviewPulse overview={overview} />}
           <section className="rb-dashboard__jobs" aria-labelledby="current-jobs-heading">
             <div className="rb-dashboard__jobs-heading">
               <div>
@@ -107,6 +108,47 @@ export function JobsPage({ view = "jobs" }: { view?: "overview" | "jobs" }) {
         </div>
       )}
     </>
+  );
+}
+
+function OverviewPulse({
+  overview,
+}: {
+  overview: { active: number; applicants: number; shortlisted: number; interviews: number };
+}) {
+  const largest = Math.max(overview.applicants, 1);
+  const stages = [
+    { label: "Applied", value: overview.applicants },
+    { label: "Shortlisted", value: overview.shortlisted },
+    { label: "Interviewed", value: overview.interviews },
+  ];
+
+  return (
+    <section className="rb-overview-pulse" aria-labelledby="overview-pulse-heading">
+      <div className="rb-overview-pulse__pipeline">
+        <div className="rb-overview-pulse__heading">
+          <div>
+            <p className="text-label">Candidate pipeline</p>
+            <h2 id="overview-pulse-heading" className="text-title-3">Where candidates are moving</h2>
+          </div>
+          <span className="text-caption">Across active roles</span>
+        </div>
+        <div className="rb-overview-pulse__stages">
+          {stages.map((stage) => (
+            <div key={stage.label} className="rb-overview-pulse__stage">
+              <span>{stage.label}</span>
+              <div aria-hidden="true"><i style={{ width: `${Math.max(8, (stage.value / largest) * 100)}%` }} /></div>
+              <strong>{stage.value}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+      <aside className="rb-overview-pulse__focus">
+        <p className="text-label">Hiring focus</p>
+        <strong>{overview.active} active role{overview.active === 1 ? "" : "s"}</strong>
+        <p>Review shortlisted candidates first, then send interview links from each dossier.</p>
+      </aside>
+    </section>
   );
 }
 

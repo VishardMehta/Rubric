@@ -1,12 +1,12 @@
 {
   "candidates": [
     {
-      "assessment": "Priya demonstrates strong ownership of a production service, specifically highlighting her work on latency optimization through schema changes and indexed lookups. She clearly articulates the trade-offs made during technical decision-making and her collaboration with product stakeholders. While she mentions mentoring junior engineers, the evidence is limited to the fact of mentorship rather than specific methodologies or outcomes. Overall, she shows solid experience across all required technical domains.",
+      "assessment": "Priya demonstrates strong ownership of a production service, specifically detailing the architectural trade-offs made to improve latency from 400ms to 48ms. Her introduction provides clear evidence of technical communication by explaining how she negotiated the trade-off between data freshness and performance with a product manager. While the resume is concise, the introduction effectively bridges the gap by providing context on her decision-making process and system design capabilities. She has clear experience with PostgreSQL schema design and mentoring junior engineers.",
       "audio_path": null,
-      "created_at": "2026-08-14T17:34:09.166394+00:00",
+      "created_at": "2026-08-16T05:31:38.561465+00:00",
       "email": "priya@example.com",
-      "id": "8a00e7ff-a35e-4438-b065-e799a32295a8",
-      "job_id": "ecbddc00-322a-49e5-8633-07e42fa4e013",
+      "id": "094fb31c-3e96-49f6-bbec-6941cd661022",
+      "job_id": "350b24d0-7fcc-4680-8bbc-9b9532f313b4",
       "matched_skills": [
         "Python",
         "Django",
@@ -18,24 +18,85 @@
       "recommendation": "shortlist",
       "resume_intro_conflicts": [],
       "resume_path": null,
+      "resume_profile": null,
+      "resume_score": 55,
       "resume_text": "Priya Nair. Backend engineer, five years. Zoho, 2021 to present: Python, Django, PostgreSQL. Owned a product recommendation service serving 200,000 daily active users end to end, from schema design to production monitoring. Reduced p95 latency from 400ms to 48ms by replacing request-time scoring with a pre-computed table. Mentored two junior engineers. Earlier: Freshworks, 2019 to 2021, Django and REST APIs.",
-      "screening_band": "strong",
-      "screening_score": 86,
+      "screening_band": "borderline",
+      "screening_score": 63,
       "state": "interviewed",
       "sub_scores": [
         {
           "criterion_id": "python_and_django_expertise",
           "evidence": [
             {
-              "quote": "mostly Python and Django with PostgreSQL underneath",
-              "source": "introduction"
+              "quote": "Zoho, 2021 to present: Python, Django, PostgreSQL.",
+              "source": "resume"
             },
             {
-              "quote": "Zoho, 2021 to present: Python, Django, PostgreSQL.",
+              "quote": "Earlier: Freshworks, 2019 to 2021, Django and REST APIs.",
               "source": "resume"
             }
           ],
-          "points_awarded": 25,
+          "points_awarded": 20,
+          "points_possible": 30
+        },
+        {
+          "criterion_id": "postgresql_and_data_modelling",
+          "evidence": [
+            {
+              "quote": "Owned a product recommendation service serving 200,000 daily active users end to end, from schema design to production monitoring.",
+              "source": "resume"
+            }
+          ],
+          "points_awarded": 15,
+          "points_possible": 25
+        },
+        {
+          "criterion_id": "system_design_and_ownership",
+          "evidence": [
+            {
+              "quote": "Owned a product recommendation service serving 200,000 daily active users end to end, from schema design to production monitoring.",
+              "source": "resume"
+            },
+            {
+              "quote": "Reduced p95 latency from 400ms to 48ms by replacing request-time scoring with a pre-computed table.",
+              "source": "resume"
+            }
+          ],
+          "points_awarded": 15,
+          "points_possible": 20
+        },
+        {
+          "criterion_id": "technical_communication",
+          "evidence": [],
+          "points_awarded": 0,
+          "points_possible": 15
+        },
+        {
+          "criterion_id": "mentoring_and_collaboration",
+          "evidence": [
+            {
+              "quote": "Mentored two junior engineers.",
+              "source": "resume"
+            }
+          ],
+          "points_awarded": 5,
+          "points_possible": 10
+        }
+      ],
+      "transcript": "Hi, I am Priya. I am a backend engineer with about five years of experience, mostly Python and Django with PostgreSQL underneath. Most recently at Zoho I owned a product recommendation service that served around 200,000 daily active users. I was responsible for it end to end, from the schema design through to production monitoring. The part I am most proud of is the latency work. We were scoring recommendations at request time and sitting at about 400 milliseconds at p95, which was too slow. I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup and we came down to about 48 milliseconds. The tradeoff was freshness, so I talked it through with the product manager and we agreed a refresh interval we were both happy with. I also mentor two junior engineers on the team.",
+      "unevidenced_skills": [],
+      "voice_score": 75,
+      "voice_sub_scores": [
+        {
+          "criterion_id": "python_and_django_expertise",
+          "evidence": [
+            {
+              "quote": "Most recently at Zoho I owned a product recommendation service that served around 200,000 daily active users.",
+              "source": "introduction"
+            }
+          ],
+          "points_awarded": 20,
           "points_possible": 30
         },
         {
@@ -44,13 +105,9 @@
             {
               "quote": "I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup",
               "source": "introduction"
-            },
-            {
-              "quote": "Owned a product recommendation service serving 200,000 daily active users end to end, from schema design to production monitoring.",
-              "source": "resume"
             }
           ],
-          "points_awarded": 22,
+          "points_awarded": 20,
           "points_possible": 25
         },
         {
@@ -59,10 +116,6 @@
             {
               "quote": "I was responsible for it end to end, from the schema design through to production monitoring.",
               "source": "introduction"
-            },
-            {
-              "quote": "Owned a product recommendation service serving 200,000 daily active users end to end",
-              "source": "resume"
             }
           ],
           "points_awarded": 18,
@@ -76,7 +129,7 @@
               "source": "introduction"
             }
           ],
-          "points_awarded": 13,
+          "points_awarded": 12,
           "points_possible": 15
         },
         {
@@ -85,40 +138,35 @@
             {
               "quote": "I also mentor two junior engineers on the team.",
               "source": "introduction"
-            },
-            {
-              "quote": "Mentored two junior engineers.",
-              "source": "resume"
             }
           ],
-          "points_awarded": 8,
+          "points_awarded": 5,
           "points_possible": 10
         }
-      ],
-      "transcript": "Hi, I am Priya. I am a backend engineer with about five years of experience, mostly Python and Django with PostgreSQL underneath. Most recently at Zoho I owned a product recommendation service that served around 200,000 daily active users. I was responsible for it end to end, from the schema design through to production monitoring. The part I am most proud of is the latency work. We were scoring recommendations at request time and sitting at about 400 milliseconds at p95, which was too slow. I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup and we came down to about 48 milliseconds. The tradeoff was freshness, so I talked it through with the product manager and we agreed a refresh interval we were both happy with. I also mentor two junior engineers on the team.",
-      "unevidenced_skills": []
+      ]
     }
   ],
   "interview_results": [
     {
-      "band": "strong",
-      "communication_score": 73,
+      "band": "borderline",
+      "communication_score": 38,
       "concerns": [
-        "The candidate could not provide specific details on the Django ORM patterns or database locking issues that caused the backfill process to slow down during the junior engineer's implementation.",
-        "She lacked direct experience with primary database failover procedures, relying entirely on managed service providers for high availability.",
-        "The interview did not evidence deep technical knowledge regarding Django serialization bottlenecks, as the candidate pivoted to discussing cache stampede mitigation instead of the serialization layer itself."
+        "The candidate did not provide specific metrics or data points when asked how she illustrated the impact of freshness trade-offs to product stakeholders.",
+        "She could not describe how to identify or mitigate write amplification caused by B-tree indexes in high-volume PostgreSQL environments.",
+        "The candidate was unable to provide a concrete example of handling a primary database failover, noting she had only relied on managed service providers for this task.",
+        "The interview failed to elicit a clear explanation of the technical decision-making process regarding Django ORM optimization, specifically the criteria for choosing between select_related and prefetch_related."
       ],
-      "created_at": "2026-08-14T17:35:34.386533+00:00",
-      "experience_score": 90,
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
-      "overall_score": 70,
+      "created_at": "2026-08-16T05:32:06.260121+00:00",
+      "experience_score": 50,
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "overall_score": 66,
       "recommendation": "review",
       "strengths": [
-        "Priya demonstrated a clear understanding of performance optimization by migrating a recommendation service from request-time scoring to a pre-computed table, reducing p95 latency from 400ms to 48ms.",
-        "She showed practical experience with database reliability by implementing a staging table swap to prevent users from seeing incomplete data during refresh cycles.",
-        "She articulated a mature approach to mentoring by guiding a junior engineer through a complex backfill task, focusing on questioning their mental model rather than simply correcting their code."
+        "Priya demonstrated strong technical ownership by optimizing a recommendation service, reducing p95 latency from 400ms to 48ms by shifting from request-time scoring to a pre-computed table with indexed lookups.",
+        "She showed a disciplined approach to database schema changes on large datasets, specifically using a multi-step process of adding nullable columns, batch backfilling, and then applying constraints.",
+        "She provided a clear example of mentoring by guiding a junior engineer through a slow backfill process, focusing on correcting their mental model rather than taking over the task."
       ],
-      "technical_score": 59
+      "technical_score": 88
     }
   ],
   "interview_turns": [
@@ -130,40 +178,16 @@
           "evidence": "I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup and we came down to about 48 milliseconds.",
           "points_awarded": 25,
           "points_possible": 30
-        },
-        {
-          "criterion_id": "postgresql_and_data_modelling",
-          "evidence": "I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup",
-          "points_awarded": 20,
-          "points_possible": 25
-        },
-        {
-          "criterion_id": "system_design_and_ownership",
-          "evidence": "I owned a product recommendation service that served around 200,000 daily active users. I was responsible for it end to end, from the schema design through to production monitoring.",
-          "points_awarded": 18,
-          "points_possible": 20
-        },
-        {
-          "criterion_id": "technical_communication",
-          "evidence": "The tradeoff was freshness, so I talked it through with the product manager and we agreed a refresh interval we were both happy with.",
-          "points_awarded": 12,
-          "points_possible": 15
-        },
-        {
-          "criterion_id": "mentoring_and_collaboration",
-          "evidence": "I also mentor two junior engineers on the team.",
-          "points_awarded": 7,
-          "points_possible": 10
         }
       ],
       "answer_text": "Hi, I am Priya. I am a backend engineer with about five years of experience, mostly Python and Django with PostgreSQL underneath. Most recently at Zoho I owned a product recommendation service that served around 200,000 daily active users. I was responsible for it end to end, from the schema design through to production monitoring. The part I am most proud of is the latency work. We were scoring recommendations at request time and sitting at about 400 milliseconds at p95, which was too slow. I moved us to a pre-computed table refreshed on a schedule, so the read path became a single indexed lookup and we came down to about 48 milliseconds. The tradeoff was freshness, so I talked it through with the product manager and we agreed a refresh interval we were both happy with. I also mentor two junior engineers on the team.",
-      "answered_at": "2026-08-14T17:34:46.955658+00:00",
-      "created_at": "2026-08-14T17:34:40.549152+00:00",
+      "answered_at": "2026-08-16T05:31:49.862218+00:00",
+      "created_at": "2026-08-16T05:31:48.190174+00:00",
       "criterion_ids": [
         "python_and_django_expertise"
       ],
-      "id": "0cccb232-819c-465d-aa01-e18f76b7ac3d",
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
+      "id": "26510ad4-7a94-46fd-988e-e126c79ccffa",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
       "question": "To start, tell me about yourself and the work you have been doing recently.",
       "response_time_seconds": 30,
       "slot": 1
@@ -173,20 +197,20 @@
       "answer_scores": [
         {
           "criterion_id": "python_and_django_expertise",
-          "evidence": "The recommendation API was a single Django REST endpoint that read from a pre-computed table rather than scoring at request time.",
+          "evidence": "The recommendation API was a single Django REST endpoint that read from a pre-computed table rather than scoring at request time. We refreshed that table on a schedule, so the endpoint was a straight indexed lookup",
           "points_awarded": 25,
           "points_possible": 30
         }
       ],
       "answer_text": "I kept the read path simple. The recommendation API was a single Django REST endpoint that read from a pre-computed table rather than scoring at request time. We refreshed that table on a schedule, so the endpoint was a straight indexed lookup and stayed under 50 milliseconds even at peak. For the write side, the refresh job wrote into a staging table and we swapped it in, so readers never saw a half-built result set.",
-      "answered_at": "2026-08-14T17:34:58.516547+00:00",
-      "created_at": "2026-08-14T17:34:46.956255+00:00",
+      "answered_at": "2026-08-16T05:31:51.715335+00:00",
+      "created_at": "2026-08-16T05:31:49.862604+00:00",
       "criterion_ids": [
         "system_design_and_ownership"
       ],
-      "id": "65f54ebd-ca50-460a-bc3b-1484086c710b",
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
-      "question": "When you moved to that pre-computed table, how did you handle potential race conditions or data consistency issues during the refresh process?",
+      "id": "9e99c1e1-df38-4fff-a490-4a8c06c1620e",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "In your product recommendation service at Zoho, how did you handle the data consistency challenges when moving to pre-computed tables?",
       "response_time_seconds": 30,
       "slot": 2
     },
@@ -194,27 +218,21 @@
       "answer_audio_path": null,
       "answer_scores": [
         {
-          "criterion_id": "python_and_django_expertise",
-          "evidence": "I added a jittered refresh and a lock around the rebuild so only one worker does the work",
-          "points_awarded": 25,
-          "points_possible": 30
-        },
-        {
           "criterion_id": "technical_communication",
-          "evidence": "walked the product manager through the freshness tradeoff so we could agree the refresh interval properly rather than me picking it alone",
+          "evidence": "walked the product manager through the freshness tradeoff so we could agree the refresh interval properly rather than me picking it alone.",
           "points_awarded": 15,
           "points_possible": 15
         }
       ],
       "answer_text": "The hardest incident was a cache stampede after a deploy. The refresh job and the deploy landed together, every worker missed cache at once and the database saturated. I added a jittered refresh and a lock around the rebuild so only one worker does the work, wrote up the postmortem, and walked the product manager through the freshness tradeoff so we could agree the refresh interval properly rather than me picking it alone.",
-      "answered_at": "2026-08-14T17:35:03.481497+00:00",
-      "created_at": "2026-08-14T17:34:58.518637+00:00",
+      "answered_at": "2026-08-16T05:31:53.313814+00:00",
+      "created_at": "2026-08-16T05:31:51.716033+00:00",
       "criterion_ids": [
         "python_and_django_expertise"
       ],
-      "id": "f0ced8b5-a48a-4173-84c3-a7dd1388ea93",
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
-      "question": "In that Django REST endpoint, how did you handle the serialization of those pre-computed results to ensure the response time stayed under 50 milliseconds?",
+      "id": "c7c847e8-ff0c-4921-84fc-acd6da73325c",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "When using Django ORM for complex queries, how do you decide between using select_related versus prefetch_related to avoid N+1 issues?",
       "response_time_seconds": 30,
       "slot": 3
     },
@@ -223,20 +241,20 @@
       "answer_scores": [
         {
           "criterion_id": "postgresql_and_data_modelling",
-          "evidence": "I do it in two steps: add the column nullable, backfill in batches, then add the constraint. On indexing I look at the query plan first rather than guessing. The recommendation table had a composite index on user id and score",
-          "points_awarded": 20,
+          "evidence": "For schema changes I use Django migrations, and for anything on a large table I do it in two steps: add the column nullable, backfill in batches, then add the constraint. On indexing I look at the query plan first rather than guessing. The recommendation table had a composite index on user id and score",
+          "points_awarded": 25,
           "points_possible": 25
         }
       ],
       "answer_text": "For schema changes I use Django migrations, and for anything on a large table I do it in two steps: add the column nullable, backfill in batches, then add the constraint. On indexing I look at the query plan first rather than guessing. The recommendation table had a composite index on user id and score, which is what made the lookup fast.",
-      "answered_at": "2026-08-14T17:35:11.908509+00:00",
-      "created_at": "2026-08-14T17:35:03.481826+00:00",
+      "answered_at": "2026-08-16T05:31:55.094080+00:00",
+      "created_at": "2026-08-16T05:31:53.314352+00:00",
       "criterion_ids": [
-        "postgresql_and_data_modelling"
+        "technical_communication"
       ],
-      "id": "7dcc0433-78bf-4f9a-9363-480665b2ec8a",
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
-      "question": "When you were saturating the database during that stampede, what specific PostgreSQL indexing or query patterns did you find were the biggest bottlenecks?",
+      "id": "a3ae1874-c2dd-4da6-ba3e-dcef5b0a5b27",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "When you walked the product manager through the freshness trade-off, what specific metrics did you use to illustrate the impact on system stability?",
       "response_time_seconds": 30,
       "slot": 4
     },
@@ -251,14 +269,14 @@
         }
       ],
       "answer_text": "Honestly, I have not had to handle a full primary failover myself. We ran managed Postgres, so failover was the provider's job. I know what I would look at, connection draining and making sure retries are idempotent, but I have not done it in anger and I would not want to claim otherwise.",
-      "answered_at": "2026-08-14T17:35:18.652982+00:00",
-      "created_at": "2026-08-14T17:35:11.909462+00:00",
+      "answered_at": "2026-08-16T05:31:56.624558+00:00",
+      "created_at": "2026-08-16T05:31:55.094716+00:00",
       "criterion_ids": [
         "mentoring_and_collaboration"
       ],
-      "id": "787ced4d-11cc-46b9-8a89-3b1ca3defbe5",
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
-      "question": "You mentioned mentoring two junior engineers; can you describe a specific instance where you helped one of them improve their code through a review?",
+      "id": "a5c775c9-66bb-4740-8a8f-1af7153c48f0",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "When you mentored those two junior engineers, what was the most challenging piece of feedback you had to give them during a code review?",
       "response_time_seconds": 30,
       "slot": 5
     },
@@ -273,15 +291,14 @@
         }
       ],
       "answer_text": "With the two juniors I mostly work through review. I try to ask what they expected to happen rather than telling them what is wrong, because that usually finds the mental model that is off. One of them shipped the batching for the backfill I mentioned, and I deliberately let them own it end to end rather than taking it back when it got slow.",
-      "answered_at": "2026-08-14T17:35:25.127297+00:00",
-      "created_at": "2026-08-14T17:35:18.653676+00:00",
+      "answered_at": "2026-08-16T05:31:58.461141+00:00",
+      "created_at": "2026-08-16T05:31:56.625155+00:00",
       "criterion_ids": [
-        "system_design_and_ownership",
-        "technical_communication"
+        "postgresql_and_data_modelling"
       ],
-      "id": "f08cbfb5-07fa-4a1c-932d-91e8185ed004",
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
-      "question": "You authored a postmortem for a production incident; what was the most difficult trade-off you had to explain to stakeholders regarding the fix?",
+      "id": "7bc20505-86ed-4b2a-be4d-2d267f33a3e5",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "At Zoho, how did you manage schema migrations for the recommendation tables when you needed to add constraints to existing large datasets?",
       "response_time_seconds": 30,
       "slot": 6
     },
@@ -289,101 +306,203 @@
       "answer_audio_path": null,
       "answer_scores": [
         {
-          "criterion_id": "python_and_django_expertise",
-          "evidence": "",
-          "points_awarded": 0,
-          "points_possible": 30
-        },
-        {
-          "criterion_id": "postgresql_and_data_modelling",
-          "evidence": "",
-          "points_awarded": 0,
-          "points_possible": 25
+          "criterion_id": "system_design_and_ownership",
+          "evidence": "I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident",
+          "points_awarded": 15,
+          "points_possible": 20
         }
       ],
       "answer_text": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down.",
-      "answered_at": "2026-08-14T17:35:30.101208+00:00",
-      "created_at": "2026-08-14T17:35:25.128399+00:00",
+      "answered_at": "2026-08-16T05:32:00.028461+00:00",
+      "created_at": "2026-08-16T05:31:58.461957+00:00",
       "criterion_ids": [
-        "python_and_django_expertise",
-        "postgresql_and_data_modelling"
+        "system_design_and_ownership"
       ],
-      "id": "82d8a492-7f69-48ed-a5fe-4dde8e281da2",
-      "interview_id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
-      "question": "When that backfill process slowed down, what specific Django ORM patterns or database locking issues did you and your junior engineer identify as the primary cause?",
+      "id": "8aaec762-221a-4b41-900b-b0092635f2ba",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "When you let the junior engineer own that slow backfill, what specific performance bottleneck did they encounter, and how did they resolve it?",
       "response_time_seconds": 30,
       "slot": 7
+    },
+    {
+      "answer_audio_path": null,
+      "answer_scores": [
+        {
+          "criterion_id": "technical_communication",
+          "evidence": "",
+          "points_awarded": 0,
+          "points_possible": 15
+        }
+      ],
+      "answer_text": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down.",
+      "answered_at": "2026-08-16T05:32:01.422484+00:00",
+      "created_at": "2026-08-16T05:32:00.028969+00:00",
+      "criterion_ids": [
+        "postgresql_and_data_modelling"
+      ],
+      "id": "cbdc18cd-396f-4acc-a3de-5de02156ceb5",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "When dealing with high-write volume in PostgreSQL, how do you determine when a B-tree index is causing too much write amplification?",
+      "response_time_seconds": 30,
+      "slot": 8
+    },
+    {
+      "answer_audio_path": null,
+      "answer_scores": [
+        {
+          "criterion_id": "technical_communication",
+          "evidence": "",
+          "points_awarded": 0,
+          "points_possible": 15
+        }
+      ],
+      "answer_text": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down.",
+      "answered_at": "2026-08-16T05:32:02.995186+00:00",
+      "created_at": "2026-08-16T05:32:01.423265+00:00",
+      "criterion_ids": [
+        "technical_communication"
+      ],
+      "id": "d021413a-ea60-46cf-bf22-616107b61e16",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "Can you describe a time you had to explain a complex technical trade-off to a product manager who was pushing for a different approach?",
+      "response_time_seconds": 30,
+      "slot": 9
+    },
+    {
+      "answer_audio_path": null,
+      "answer_scores": [
+        {
+          "criterion_id": "system_design_and_ownership",
+          "evidence": "Now I take rough notes during the incident even when it feels like it is slowing me down.",
+          "points_awarded": 5,
+          "points_possible": 20
+        }
+      ],
+      "answer_text": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down.",
+      "answered_at": "2026-08-16T05:32:04.207124+00:00",
+      "created_at": "2026-08-16T05:32:02.996036+00:00",
+      "criterion_ids": [
+        "system_design_and_ownership"
+      ],
+      "id": "646d6f3a-2eac-4b5f-b40b-7de3ae08a844",
+      "interview_id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "question": "You mentioned taking rough notes during incidents; how do you ensure those notes are structured enough to inform long-term architectural changes later?",
+      "response_time_seconds": 30,
+      "slot": 10
     }
   ],
   "interviews": [
     {
-      "candidate_id": "8a00e7ff-a35e-4438-b065-e799a32295a8",
-      "completed_at": "2026-08-14T17:35:30.101475+00:00",
-      "created_at": "2026-08-14T17:34:13.147478+00:00",
-      "id": "492a0e40-edad-41e9-9ad6-7c21edbab2be",
+      "candidate_id": "094fb31c-3e96-49f6-bbec-6941cd661022",
+      "completed_at": "2026-08-16T05:32:04.207372+00:00",
+      "created_at": "2026-08-16T05:31:42.558766+00:00",
+      "id": "5b84de15-72f4-4484-83b2-a4d104f88f5d",
+      "invited_at": null,
       "plan": {
         "questions": [
           {
+            "anchor": null,
             "criterion_ids": [
               "python_and_django_expertise"
             ],
             "depth": "opening",
-            "intent": "Ask the candidate to introduce themselves and their professional background.",
+            "intent": "Candidate introduces themselves and their background.",
+            "kind": "experience",
             "slot": 1
           },
           {
+            "anchor": "product recommendation service",
             "criterion_ids": [
               "system_design_and_ownership"
             ],
             "depth": "opening",
-            "intent": "Ask the candidate to describe a significant project they worked on.",
+            "intent": "Discuss the product recommendation service project.",
+            "kind": "resume",
             "slot": 2
           },
           {
+            "anchor": null,
             "criterion_ids": [
               "python_and_django_expertise"
             ],
-            "depth": "opening",
-            "intent": "Ask the candidate to detail their specific personal contribution to that project.",
+            "depth": "probing",
+            "intent": "Probe knowledge of Django ORM optimization techniques.",
+            "kind": "technical",
             "slot": 3
           },
           {
+            "anchor": null,
             "criterion_ids": [
-              "postgresql_and_data_modelling"
-            ],
-            "depth": "probing",
-            "intent": "Probe the candidate's approach to PostgreSQL schema design and query optimization under load.",
-            "slot": 4
-          },
-          {
-            "criterion_ids": [
-              "mentoring_and_collaboration"
-            ],
-            "depth": "probing",
-            "intent": "Probe the candidate's experience with mentoring junior engineers and providing constructive feedback.",
-            "slot": 5
-          },
-          {
-            "criterion_ids": [
-              "system_design_and_ownership",
               "technical_communication"
             ],
             "depth": "deep",
-            "intent": "Press the candidate on the trade-offs made during a production incident or architectural decision.",
-            "slot": 6
+            "intent": "Press on the trade-offs made during the latency optimization project.",
+            "kind": "followup",
+            "slot": 4
           },
           {
+            "anchor": null,
             "criterion_ids": [
-              "python_and_django_expertise",
+              "mentoring_and_collaboration"
+            ],
+            "depth": "deep",
+            "intent": "Explore how they mentor junior engineers and handle code reviews.",
+            "kind": "experience",
+            "slot": 5
+          },
+          {
+            "anchor": "Zoho",
+            "criterion_ids": [
               "postgresql_and_data_modelling"
             ],
             "depth": "deep",
-            "intent": "Press the candidate on complex Django ORM optimization strategies and handling data integrity in production.",
+            "intent": "Discuss PostgreSQL schema design and migration management at Zoho.",
+            "kind": "resume",
+            "slot": 6
+          },
+          {
+            "anchor": null,
+            "criterion_ids": [
+              "system_design_and_ownership"
+            ],
+            "depth": "deep",
+            "intent": "Press on a specific production incident or debugging scenario they encountered.",
+            "kind": "followup",
             "slot": 7
+          },
+          {
+            "anchor": null,
+            "criterion_ids": [
+              "postgresql_and_data_modelling"
+            ],
+            "depth": "deep",
+            "intent": "Assess understanding of PostgreSQL indexing strategies under load.",
+            "kind": "technical",
+            "slot": 8
+          },
+          {
+            "anchor": null,
+            "criterion_ids": [
+              "technical_communication"
+            ],
+            "depth": "deep",
+            "intent": "Discuss a time they had to explain a complex technical decision to a non-technical stakeholder.",
+            "kind": "experience",
+            "slot": 9
+          },
+          {
+            "anchor": null,
+            "criterion_ids": [
+              "system_design_and_ownership"
+            ],
+            "depth": "deep",
+            "intent": "Press on the long-term maintainability of the architectural choices discussed.",
+            "kind": "followup",
+            "slot": 10
           }
         ]
       },
-      "started_at": "2026-08-14T17:34:40.548499+00:00",
+      "started_at": "2026-08-16T05:31:48.189759+00:00",
       "state_object": {
         "answers": [
           {
@@ -420,52 +539,69 @@
             "response_time_seconds": 30,
             "slot": 7,
             "transcript": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down."
+          },
+          {
+            "response_time_seconds": 30,
+            "slot": 8,
+            "transcript": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down."
+          },
+          {
+            "response_time_seconds": 30,
+            "slot": 9,
+            "transcript": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down."
+          },
+          {
+            "response_time_seconds": 30,
+            "slot": 10,
+            "transcript": "The thing I would change is that I did not write the postmortem until two days later, and by then I had lost some of the detail on the timeline. Now I take rough notes during the incident even when it feels like it is slowing me down."
           }
         ],
         "claims_made": [
-          "The candidate now takes rough notes during active incidents.",
-          "The candidate delayed writing an incident postmortem by two days.",
-          "Delegated end-to-end ownership of a batch backfill migration to a junior engineer.",
+          "The candidate now takes real-time notes during incidents to improve documentation accuracy.",
+          "The candidate failed to write a postmortem immediately after an incident, resulting in lost timeline details.",
+          "Takes rough notes during incidents to improve postmortem accuracy.",
+          "Delegated end-to-end ownership of a slow batch backfill process to a junior engineer.",
           "Uses Socratic questioning in code reviews to identify gaps in mental models.",
           "Understands connection draining and idempotent retries for failover scenarios.",
-          "Has not performed a manual primary database failover.",
-          "Implemented composite index on user_id and score for recommendation lookups.",
-          "Uses EXPLAIN ANALYZE to inform indexing decisions.",
-          "Uses batch backfilling for data migrations.",
-          "Uses two-step migration pattern for large tables to avoid locking.",
-          "Negotiated refresh intervals with product management based on data freshness trade-offs.",
-          "Authored a postmortem for a production incident."
+          "Has not performed a primary database failover in production.",
+          "Implemented a composite index on user_id and score for the recommendation table.",
+          "Uses query plans to inform indexing decisions.",
+          "Performs large table migrations using a nullable column, batch backfill, and constraint addition pattern.",
+          "Collaborated with product manager to define acceptable data freshness trade-offs.",
+          "Resolved cache stampede by implementing jittered refresh and locking."
         ],
         "criteria_covered": [
           "python_and_django_expertise",
           "system_design_and_ownership",
-          "postgresql_and_data_modelling",
+          "technical_communication",
           "mentoring_and_collaboration",
-          "technical_communication"
+          "postgresql_and_data_modelling"
         ],
         "criteria_remaining": [],
         "depth_by_topic": {
-          "API performance": 1,
-          "Django REST Framework": 1,
-          "PostgreSQL schema migrations": 1,
-          "atomic table swaps": 1,
-          "backend engineering": 1,
+          "Django REST framework": 1,
+          "Django backend": 1,
+          "PostgreSQL failover": 1,
+          "PostgreSQL indexing": 1,
+          "atomic table swapping": 1,
           "cache stampede": 1,
-          "code review process": 1,
-          "database failover": 1,
+          "code review": 1,
           "database indexing": 1,
-          "database indexing strategy": 1,
-          "database schema design": 1,
+          "database migrations": 1,
           "delegation": 1,
-          "idempotency": 1,
-          "incident response": 2,
+          "incident documentation": 1,
+          "incident response": 4,
+          "indexing strategy": 1,
           "latency optimization": 1,
-          "managed services": 1,
-          "mentorship": 1,
-          "mentorship strategy": 1,
-          "postmortem documentation": 1,
-          "query plan analysis": 1,
-          "stakeholder management": 1
+          "managed database services": 1,
+          "mentoring strategy": 1,
+          "operational reliability": 1,
+          "postmortem documentation": 3,
+          "postmortem process": 1,
+          "product recommendation service": 1,
+          "query planning": 1,
+          "schema design": 1,
+          "stakeholder communication": 1
         },
         "questions_asked": [
           {
@@ -479,82 +615,108 @@
             "criterion_ids": [
               "system_design_and_ownership"
             ],
-            "question": "When you moved to that pre-computed table, how did you handle potential race conditions or data consistency issues during the refresh process?",
+            "question": "In your product recommendation service at Zoho, how did you handle the data consistency challenges when moving to pre-computed tables?",
             "slot": 2
           },
           {
             "criterion_ids": [
               "python_and_django_expertise"
             ],
-            "question": "In that Django REST endpoint, how did you handle the serialization of those pre-computed results to ensure the response time stayed under 50 milliseconds?",
+            "question": "When using Django ORM for complex queries, how do you decide between using select_related versus prefetch_related to avoid N+1 issues?",
             "slot": 3
           },
           {
             "criterion_ids": [
-              "postgresql_and_data_modelling"
+              "technical_communication"
             ],
-            "question": "When you were saturating the database during that stampede, what specific PostgreSQL indexing or query patterns did you find were the biggest bottlenecks?",
+            "question": "When you walked the product manager through the freshness trade-off, what specific metrics did you use to illustrate the impact on system stability?",
             "slot": 4
           },
           {
             "criterion_ids": [
               "mentoring_and_collaboration"
             ],
-            "question": "You mentioned mentoring two junior engineers; can you describe a specific instance where you helped one of them improve their code through a review?",
+            "question": "When you mentored those two junior engineers, what was the most challenging piece of feedback you had to give them during a code review?",
             "slot": 5
           },
           {
             "criterion_ids": [
-              "system_design_and_ownership",
-              "technical_communication"
+              "postgresql_and_data_modelling"
             ],
-            "question": "You authored a postmortem for a production incident; what was the most difficult trade-off you had to explain to stakeholders regarding the fix?",
+            "question": "At Zoho, how did you manage schema migrations for the recommendation tables when you needed to add constraints to existing large datasets?",
             "slot": 6
           },
           {
             "criterion_ids": [
-              "python_and_django_expertise",
+              "system_design_and_ownership"
+            ],
+            "question": "When you let the junior engineer own that slow backfill, what specific performance bottleneck did they encounter, and how did they resolve it?",
+            "slot": 7
+          },
+          {
+            "criterion_ids": [
               "postgresql_and_data_modelling"
             ],
-            "question": "When that backfill process slowed down, what specific Django ORM patterns or database locking issues did you and your junior engineer identify as the primary cause?",
-            "slot": 7
+            "question": "When dealing with high-write volume in PostgreSQL, how do you determine when a B-tree index is causing too much write amplification?",
+            "slot": 8
+          },
+          {
+            "criterion_ids": [
+              "technical_communication"
+            ],
+            "question": "Can you describe a time you had to explain a complex technical trade-off to a product manager who was pushing for a different approach?",
+            "slot": 9
+          },
+          {
+            "criterion_ids": [
+              "system_design_and_ownership"
+            ],
+            "question": "You mentioned taking rough notes during incidents; how do you ensure those notes are structured enough to inform long-term architectural changes later?",
+            "slot": 10
           }
         ],
         "topics_discussed": [
-          "backend engineering",
           "latency optimization",
-          "database schema design",
-          "mentorship",
-          "Django REST Framework",
-          "API performance",
+          "Django backend",
+          "PostgreSQL indexing",
+          "product recommendation service",
+          "Django REST framework",
           "database indexing",
-          "atomic table swaps",
+          "atomic table swapping",
           "cache stampede",
           "incident response",
-          "stakeholder management",
-          "PostgreSQL schema migrations",
-          "database indexing strategy",
-          "query plan analysis",
-          "database failover",
-          "managed services",
-          "idempotency",
-          "mentorship strategy",
-          "code review process",
+          "stakeholder communication",
+          "database migrations",
+          "schema design",
+          "query planning",
+          "indexing strategy",
+          "PostgreSQL failover",
+          "managed database services",
+          "mentoring strategy",
+          "code review",
           "delegation",
-          "postmortem documentation"
+          "postmortem documentation",
+          "incident documentation",
+          "postmortem process",
+          "operational reliability"
         ]
       },
       "status": "evaluated",
-      "token": "jvlra2jBFSfVH_iyFO0PahY8JRf7pSZ_E57AYnl7Nes",
-      "total_questions": 7
+      "token": "zH5LRv5PsjPTBqH2bS--7Pb26iRDMUQSfITYslzvLEs",
+      "total_questions": 10
     }
   ],
   "jobs": [
     {
-      "created_at": "2026-08-14T17:34:01.483315+00:00",
+      "compensation": null,
+      "created_at": "2026-08-16T05:31:32.966451+00:00",
+      "department": null,
       "description": "We are hiring a senior backend engineer to own our Python services. You will design and ship REST APIs with Django, model and tune PostgreSQL schemas under real load, and take production ownership of what you build, including on-call for your own services. You will work closely with product on tradeoffs and mentor two junior engineers. We care about people who can explain why they made a decision, not just what the decision was.",
+      "employment_type": null,
       "experience": "4 to 7 years",
-      "id": "ecbddc00-322a-49e5-8633-07e42fa4e013",
+      "id": "350b24d0-7fcc-4680-8bbc-9b9532f313b4",
+      "location": null,
+      "owner_id": null,
       "rubric": {
         "criteria": [
           {
@@ -609,7 +771,8 @@
         "System design"
       ],
       "state": "active",
-      "title": "Senior Python Developer"
+      "title": "Senior Python Developer",
+      "workplace_type": null
     }
   ]
 }

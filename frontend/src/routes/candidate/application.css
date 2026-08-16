@@ -52,9 +52,9 @@
 
 .rb-candidate-topbar {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto minmax(220px, 1fr);
+  grid-template-columns: minmax(160px, 1fr) auto minmax(180px, 1fr);
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-6);
   min-height: 76px;
   padding: 0 var(--layout-gutter-wide);
   background: var(--color-surface);
@@ -111,24 +111,6 @@
   background: var(--color-accent);
   content: "";
 }
-
-.rb-candidate-topbar__search {
-  display: flex;
-  align-items: center;
-  justify-self: end;
-  width: min(100%, 312px);
-  gap: var(--space-2);
-  height: 40px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-hairline-strong);
-  border-radius: var(--radius-pill);
-  background: var(--color-canvas);
-  color: var(--color-ink-secondary);
-}
-
-.rb-candidate-topbar__search > span { font-size: 21px; line-height: 1; transform: translateY(-1px); }
-.rb-candidate-topbar__search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font-size: var(--text-body-size); }
-.rb-candidate-topbar__search input::placeholder { color: var(--color-ink-secondary); }
 
 .rb-candidate-portal-main {
   width: min(100%, calc(1120px + var(--layout-gutter-wide) * 2));
@@ -266,7 +248,6 @@
 .rb-opportunity-card__meta > span { margin-right: var(--space-2); }
 
 .rb-opportunity-card__action,
-.rb-opportunity-detail__back,
 .rb-application-done__link {
   display: inline-flex;
   align-items: center;
@@ -283,8 +264,19 @@
 }
 
 .rb-opportunity-card__action:hover,
-.rb-opportunity-detail__back:hover,
 .rb-application-done__link:hover { background: var(--color-accent-tint); text-decoration: none; }
+
+/* A quiet way back, not a call to action. It shares nothing with the
+   bordered buttons: in a flex column that border stretched the whole
+   width of the page and read as the primary control. */
+.rb-opportunity-detail__back {
+  align-self: flex-start;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+  text-decoration: none;
+}
+
+.rb-opportunity-detail__back:hover { color: var(--color-ink); }
 
 .rb-opportunities__applications {
   padding: var(--space-8);
@@ -313,7 +305,10 @@
   .rb-candidate-topbar__nav { grid-column: 1 / -1; grid-row: 2; overflow-x: auto; }
   .rb-candidate-topbar__nav-item { min-height: 38px; padding: 0 var(--space-3); white-space: nowrap; }
   .rb-candidate-topbar__nav-item--active::after { right: var(--space-3); left: var(--space-3); }
-  .rb-candidate-topbar__search { width: min(100%, 180px); padding: 0 var(--space-2); border-radius: var(--radius-sm); }
+  .rb-candidate-topbar__right { gap: var(--space-3); }
+  /* The address is the widest thing in the bar and the least urgent. The
+     sign out control stays. */
+  .rb-candidate-topbar__account-email { display: none; }
   .rb-candidate-portal-main { padding: var(--space-10) var(--layout-gutter-compact) var(--space-16); }
   .rb-opportunities { gap: var(--space-8); }
   .rb-opportunities__controls { grid-template-columns: 1fr; }
@@ -341,11 +336,24 @@
 .rb-opportunities__application-list strong { font-weight: var(--text-body-strong-weight); }
 .rb-opportunities__application-list small { color: var(--color-ink-secondary); font-size: var(--text-caption-size); }
 
+/* --- Opportunity detail --------------------------------------------------
+ * Broader than the rest of the candidate side, and two columns on desktop.
+ *
+ * This is the one candidate screen that is genuinely a document: a full
+ * job posting, read to decide whether to spend fifteen minutes applying.
+ * At the 640px reading measure the description ran to twice the height and
+ * the apply action was stranded at the top, above everything it was the
+ * answer to. The description keeps a reading measure of its own inside the
+ * wider frame; only the page gets wider.
+ */
+
 .rb-opportunity-detail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-10);
-  max-width: 680px;
+  gap: var(--space-8);
+  width: min(100%, 1040px);
+  /* Widens past the shell's own column, which caps candidate prose. */
+  margin-inline: auto;
   animation: rb-candidate-portal-in var(--duration-slow) var(--ease-entrance);
 }
 
@@ -353,33 +361,242 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
-.rb-opportunity-detail__header p,
-.rb-opportunity-detail__header h1 { margin: 0; }
-.rb-opportunity-detail__header > p:last-of-type { color: var(--color-ink-secondary); }
+.rb-opportunity-detail__eyebrow {
+  margin: 0;
+  color: var(--color-accent);
+}
+
+/* Larger than title-1 and tighter: the title is the first thing read on
+   the page and everything under it is subordinate to it. */
+.rb-opportunity-detail__title {
+  margin: 0;
+  max-width: 20ch;
+  font-size: clamp(var(--text-title-1-size), 3.4vw, 40px);
+  font-weight: var(--text-title-1-weight);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+}
+
+/* Department, posted date and experience as one quiet line of metadata,
+   separated by dots rather than stacked into three paragraphs. */
+.rb-opportunity-detail__byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-body-size);
+}
+
+.rb-opportunity-detail__byline > span + span::before {
+  margin-right: var(--space-3);
+  color: var(--color-hairline-strong);
+  content: "·";
+}
+
+.rb-opportunity-detail__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: var(--space-10);
+}
+
+.rb-opportunity-detail__main {
+  min-width: 0;
+}
+
+.rb-opportunity-detail__aside {
+  display: flex;
+  position: sticky;
+  /* Follows the description down rather than being left at the top of a
+     posting the reader has scrolled past. */
+  top: var(--space-8);
+  flex-direction: column;
+  gap: var(--space-4);
+}
 
 .rb-opportunity-detail__section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--color-hairline);
+  gap: var(--space-4);
 }
 
-.rb-opportunity-detail__section .text-label { margin: 0; }
-
-.rb-opportunity-detail__description {
+.rb-opportunity-detail__section-label {
   margin: 0;
-  white-space: pre-wrap;
-  font-variant-numeric: normal;
+  color: var(--color-ink-secondary);
 }
 
 .rb-opportunity-detail__skills {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* --- Apply card ---------------------------------------------------------- */
+
+.rb-opportunity-detail__apply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1px solid var(--color-accent-ring, var(--color-hairline-strong));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.rb-opportunity-detail__apply h2 { margin: 0; }
+
+.rb-opportunity-detail__apply p {
+  margin: 0;
+  color: var(--color-ink-secondary);
+}
+
+.rb-opportunity-detail__apply-action {
+  margin-top: var(--space-3);
+  text-decoration: none;
+}
+
+.rb-opportunity-detail__apply-action .rb-button { width: 100%; }
+
+/* Applied is a state, not an achievement: a tinted surface and a tick,
+   not a green success banner. */
+.rb-opportunity-detail__apply--applied {
+  border-color: var(--color-hairline-strong);
+  background: var(--color-accent-tint);
+  box-shadow: none;
+}
+
+.rb-opportunity-detail__applied-mark {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: var(--text-caption-size);
+}
+
+/* --- Side panels --------------------------------------------------------- */
+
+.rb-opportunity-detail__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.rb-opportunity-detail__panel h2 {
+  margin: 0;
+  color: var(--color-ink-secondary);
+}
+
+.rb-opportunity-detail__how ol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: rb-how;
+}
+
+.rb-opportunity-detail__how li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-body-line-height);
+  counter-increment: rb-how;
+}
+
+.rb-opportunity-detail__how li::before {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  font-size: 11px;
+  font-weight: var(--text-body-strong-weight);
+  content: counter(rb-how);
+}
+
+/* --- Job description ------------------------------------------------------
+ * A pasted posting, given back the structure its author typed. Parsed in
+ * lib/job-description.ts, which reads shape and never rewrites a word.
+ */
+
+.rb-jd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* A reading measure inside the wider page. The frame got broader so the
+     apply card could sit beside the prose, not so the prose could run to
+     120 characters a line. */
+  max-width: 68ch;
+  color: var(--color-ink);
+  font-variant-numeric: normal;
+}
+
+.rb-jd__paragraph {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  line-height: 1.7;
+}
+
+.rb-jd__heading {
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink);
+  font-size: var(--text-body-strong-size);
+  font-weight: var(--text-body-strong-weight);
+  letter-spacing: -0.01em;
+}
+
+.rb-jd > .rb-jd__heading:first-child { margin-top: 0; }
+
+.rb-jd__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rb-jd__list li {
+  position: relative;
+  padding-left: var(--space-6);
+  color: var(--color-ink-secondary);
+  line-height: 1.7;
+}
+
+/* An indigo marker rather than a disc: it is the one place the accent
+   appears in the body copy, and it makes a list scannable at a glance. */
+.rb-jd__list li::before {
+  position: absolute;
+  top: 0.62em;
+  left: var(--space-2);
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  content: "";
 }
 
 @keyframes rb-candidate-portal-in {
@@ -507,12 +724,15 @@
    fifteen minutes applying, so they are answered before the prose. */
 .rb-opportunity-detail__facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-5) var(--space-6);
   margin: 0;
-  padding: var(--space-5) 0;
-  border-top: 1px solid var(--color-hairline);
-  border-bottom: 1px solid var(--color-hairline);
+  /* One grouped surface rather than a band between two rules. These are
+     structured facts and should read as a block of them. */
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .rb-opportunity-detail__facts dt {
@@ -531,17 +751,29 @@
 }
 
 /* --- Candidate applications ----------------------------------------------
- * Server backed since Phase D. Looked up by the email the person applied
- * with: there are no candidate accounts, because a password would need a
- * reset flow and reset needs email delivery, which is out of scope.
+ * Server backed since Phase D, and keyed on the address the person signed
+ * in with. There are still no candidate accounts on the server: the sign in
+ * is a local identity, because a real password would need a reset flow and
+ * reset needs email delivery, which is out of scope.
  */
 
-.rb-applications__lookup {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+.rb-applications__identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-4);
   max-width: 560px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+}
+
+.rb-applications__identity strong {
+  color: var(--color-ink);
+  font-weight: var(--text-body-strong-weight);
 }
 
 .rb-applications__list {
@@ -581,6 +813,19 @@
   font-size: var(--text-caption-size);
 }
 
+/* The role stays readable after applying. It leaves Explore, which is
+   what is still open to them, and stays reachable from the application. */
+.rb-applications__role-link {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  color: var(--color-accent);
+  font-size: var(--text-caption-size);
+  font-weight: var(--text-body-strong-weight);
+  text-decoration: none;
+}
+
+.rb-applications__role-link:hover { text-decoration: underline; }
+
 .rb-applications__detail {
   margin: var(--space-2) 0 0;
   max-width: 60ch;
@@ -615,8 +860,150 @@
   text-decoration: none;
 }
 
+/* One column below the point where a 320px aside stops earning its place.
+   The apply card moves above the description rather than under it: it is
+   the decision the page exists for. */
+@media (max-width: 1023px) {
+  .rb-opportunity-detail__body {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: var(--space-8);
+  }
+
+  .rb-opportunity-detail__aside {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: start;
+  }
+
+  .rb-jd { max-width: none; }
+}
+
 @media (max-width: 767px) {
-  .rb-applications__lookup { grid-template-columns: 1fr; }
+  .rb-opportunity-detail { gap: var(--space-6); }
+  .rb-opportunity-detail__facts { padding: var(--space-4); gap: var(--space-4); }
+  .rb-opportunity-detail__aside { grid-template-columns: 1fr; }
   .rb-applications__row { flex-direction: column; gap: var(--space-4); }
   .rb-applications__aside { flex-direction: row; align-items: center; }
+}
+
+/* --- Candidate account ---------------------------------------------------
+ * The signed-in address in the top bar. Quiet: it is an orientation cue and
+ * a way out, not a control anyone needs to find.
+ */
+
+.rb-candidate-topbar__right {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-self: end;
+  gap: var(--space-4);
+}
+
+.rb-candidate-topbar__account {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.rb-candidate-topbar__account-email {
+  max-width: 22ch;
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: var(--text-caption-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-candidate-topbar__signout {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-caption-size);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rb-candidate-topbar__signout:hover { color: var(--color-ink); }
+
+/* --- Candidate sign in ---------------------------------------------------
+ * Same shape as the HR sign in, its own classes. Reaching across to
+ * hr.css would make this screen depend on a stylesheet that is only
+ * loaded when an HR route has already rendered.
+ */
+
+.rb-csignin {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--layout-gutter-compact);
+  background: var(--color-canvas);
+}
+
+.rb-csignin__panel {
+  display: flex;
+  width: 100%;
+  max-width: 420px;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rb-csignin__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.rb-csignin__mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.rb-csignin__title { margin: 0; }
+
+.rb-csignin__lede {
+  margin: 0;
+  color: var(--color-ink-secondary);
+}
+
+/* Said on the screen it affects. A login that does not check a password
+   must not be possible to demo for an hour without noticing. */
+.rb-csignin__demo {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+}
+
+.rb-csignin__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+
+.rb-csignin__form .rb-button {
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+.rb-csignin__switch {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  text-align: center;
 }

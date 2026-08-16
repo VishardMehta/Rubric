@@ -8,6 +8,7 @@
 export { AudioLevelMeter } from "./AudioLevelMeter";
 export { AudioPlayer } from "./AudioPlayer";
 export { CameraPreview } from "./CameraPreview";
+export type { CameraState } from "./CameraPreview";
 export { CopyLinkField } from "./CopyLinkField";
 export { MicrophoneBlocked } from "./MicrophoneBlocked";
 export { RubricPanel } from "./RubricPanel";

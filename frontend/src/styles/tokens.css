@@ -169,7 +169,12 @@
 
   /* --- Layout --- */
   --layout-hr-sidebar-width: 240px;
-  --layout-hr-sidebar-compact: 64px;
+  /* The icon column every sidebar row shares. The compact width is this
+     plus the sidebar's horizontal padding on both sides (16 + 40 + 16), so
+     collapsing leaves the icons exactly where they were. Changing either
+     one without the other moves every icon. */
+  --layout-hr-sidebar-rail: 40px;
+  --layout-hr-sidebar-compact: 72px;
   --layout-hr-content-max: 1280px;
   --layout-candidate-content-max: 640px;
   --layout-landing-content-max: 1080px;

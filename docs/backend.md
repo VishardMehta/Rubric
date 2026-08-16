@@ -578,12 +578,27 @@ class InterviewPlan(BaseModel):
 ```
 
 Rules:
-- Slots 1 to 3 are fixed intents: background, projects, personal contribution.
-  These are planned, not generated, and their `depth` is `opening`
+- `total_questions` is always `PLAN_TOTAL_QUESTIONS` (10). It used to scale
+  with rubric breadth, which gave a narrow rubric a short interview carrying
+  the same hiring decision, and made two candidates incomparable without
+  first checking they were asked the same number of questions
+- Slots 1 and 2 are fixed intents: self-introduction (`experience`), then a
+  specific project from their resume (`resume`). Their `depth` is `opening`
+- Every slot has a `kind`: `resume`, `technical`, `experience` or `followup`.
+  Only `followup` continues the previous answer's thread
+- The mix is validated, not merely requested: `PLAN_KIND_MINIMUMS` per kind,
+  at most `PLAN_MAX_FOLLOWUP_SLOTS` follow-ups, and no more than
+  `PLAN_MAX_CONSECUTIVE_SAME_KIND` of one kind in a row. Rubric coverage
+  alone does not prevent ten technical questions
+- A `resume` slot carries an `anchor`: the project, employer or tool from
+  their resume, named as their resume names it, so the question can say it
 - Every rubric criterion appears in at least one slot
 - `depth` progresses: no `deep` slot before slot 4
-- `total_questions` scales with rubric breadth: 4 criteria gives 6 questions,
-  7 criteria gives 9
+
+The plan prompt receives the job description, the rubric, the resume text,
+the parsed resume profile, the voice introduction and the per-criterion
+screening scores. A planner that has not read the resume cannot plan a
+question that names anything on it.
 
 The plan is stored and never regenerated. Only question wording is dynamic.
 

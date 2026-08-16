@@ -274,6 +274,11 @@ export interface PublicJobSummary {
   workplace_type: string | null;
   employment_type: string | null;
   compensation: string | null;
+  /** Whether the address passed to the call has already applied. Answered
+   *  by the server from the same (job_id, email) relationship the database
+   *  enforces, so Explore can only ever offer roles that applying would
+   *  actually accept. False for an anonymous browse. */
+  applied: boolean;
 }
 
 // --- Types: resume profile -------------------------------------------------
@@ -376,6 +381,11 @@ export interface CandidateSummary {
   interview_status: InterviewStatus | null;
   interview_score: number | null;
   interview_band: Band | null;
+  /** Which role this applicant is for. Redundant on Job Detail, which
+   *  already knows; it is what lets the cross-role directory label a row
+   *  without fetching each job separately. */
+  job_id: string | null;
+  job_title: string | null;
 }
 
 export interface CandidateDetail {
@@ -390,7 +400,14 @@ export interface CandidateDetail {
   screening_score: number | null;
   screening_band: Band | null;
   recommendation: Recommendation | null;
+  /** The two components behind screening_score, each a full 0-100 scoring
+   *  of the same rubric: one from the resume, one from the spoken
+   *  introduction, weighted 60/40 on the server. Null on rows screened
+   *  before the split. */
+  resume_score: number | null;
+  voice_score: number | null;
   sub_scores: SubScoreOut[];
+  voice_sub_scores: SubScoreOut[];
   matched_skills: string[];
   unevidenced_skills: string[];
   resume_intro_conflicts: string[];
@@ -523,6 +540,9 @@ export const api = {
 
   // HR: candidates
   listCandidates: (jobId: string) => request<CandidateSummary[]>(`/jobs/${jobId}/candidates`),
+  /** Every applicant across the account's roles, in one request. The
+   *  directory used to fan out over listCandidates, one call per job. */
+  listAllCandidates: () => request<CandidateSummary[]>("/candidates"),
   getCandidate: (candidateId: string) => request<CandidateDetail>(`/candidates/${candidateId}`),
   approveCandidate: (candidateId: string) =>
     request<ApprovalResult>(`/candidates/${candidateId}/approve`, { method: "POST" }),
@@ -538,10 +558,18 @@ export const api = {
     request<InterviewResult>(`/candidates/${candidateId}/interview/evaluate`, { method: "POST" }),
 
   // Candidate: application
-  listPublicJobs: () => request<PublicJobSummary[]>("/apply"),
+  /** Every active role. Pass the signed-in candidate's address and each
+   *  row comes back flagged with whether they have already applied. */
+  listPublicJobs: (email?: string) =>
+    request<PublicJobSummary[]>(
+      email ? `/apply?email=${encodeURIComponent(email)}` : "/apply",
+    ),
   listApplications: (email: string) =>
     request<CandidateApplication[]>(`/applications?email=${encodeURIComponent(email)}`),
-  getPublicJob: (jobId: string) => request<PublicJobSummary>(`/apply/${jobId}`),
+  getPublicJob: (jobId: string, email?: string) =>
+    request<PublicJobSummary>(
+      email ? `/apply/${jobId}?email=${encodeURIComponent(email)}` : `/apply/${jobId}`,
+    ),
 
   // Candidate: interview
   getSession: (token: string) => request<InterviewSession>(`/interview/${token}`),

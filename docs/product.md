@@ -48,7 +48,7 @@ navigation.
 What a candidate does:
 - Opens an application link, enters name and email, uploads a resume PDF, and
   records a voice introduction
-- Later, opens an interview link and completes a voice interview of 5 to 10
+- Later, opens an interview link and completes a voice interview of 10
   adaptive questions
 - Sees a confirmation and nothing else
 
@@ -115,7 +115,7 @@ Interview plan is generated
 │     Next question is generated,           │
 │     targeting uncovered criteria          │
 │           │                               │
-└───────────┘  repeats 5 to 10 times        │
+└───────────┘  repeats 10 times           │
             │                               │
             ▼                               │
       Interview marked complete ────────────┘
@@ -218,9 +218,12 @@ from a wrapper around a chat model.
 When a candidate opens their interview link, before the first question, Rubric
 generates a plan:
 
-- Total question count, 5 to 10, chosen from rubric breadth
-- An opening sequence of 2 to 3 fixed-intent questions: background, projects,
-  personal contribution
+- Total question count: always 10
+- Two fixed-intent openers: self-introduction, then a named project from
+  their resume
+- A `kind` per slot - resume, technical, experience or followup - mixed so
+  the interview tests several facets of a person rather than one facet ten
+  times
 - A mapping from each remaining planned slot to the rubric criteria it should
   probe
 - A difficulty progression, so later questions go deeper rather than wider

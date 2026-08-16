@@ -11,9 +11,12 @@ import pytest
 
 from app.core.heuristics import (
     PLAN_FIXED_OPENING_SLOTS,
-    PLAN_MAX_QUESTIONS,
-    PLAN_MIN_QUESTIONS,
+    PLAN_KIND_MINIMUMS,
+    PLAN_MAX_CONSECUTIVE_SAME_KIND,
+    PLAN_MAX_FOLLOWUP_SLOTS,
+    PLAN_MIN_FOLLOWUP_SLOTS,
     PLAN_MIN_SLOT_FOR_DEEP_DEPTH,
+    PLAN_TOTAL_QUESTIONS,
     QUESTION_SIMILARITY_THRESHOLD,
     STATE_CLAIMS_MADE_CAP,
 )
@@ -45,61 +48,77 @@ from tests.fixtures.rubrics import valid_rubric
 
 
 def _plan(rubric: Rubric, total: int | None = None) -> InterviewPlan:
-    """A valid plan: three openers, then one slot per criterion."""
+    """A valid plan: two openers, then a mix of kinds that satisfies both
+    the rubric coverage rule and the question-mix rule.
+
+    Written as a generator over the constants rather than a hand-listed ten
+    slots, so tightening PLAN_KIND_MINIMUMS breaks the assertion it should
+    break rather than this fixture.
+    """
     total = total or planned_question_count(rubric)
+    criterion_ids = [c.id for c in rubric.criteria]
+
+    # Slots 3 onward, interleaved so no kind runs longer than the cap and
+    # the follow-up count lands inside its floor and ceiling.
+    rotation = [
+        "technical", "followup", "experience", "resume",
+        "technical", "followup", "experience", "followup",
+    ]
+
     questions = [
         PlannedQuestion(
-            slot=1, intent="Background", criterion_ids=["relevant_experience"], depth="opening"
+            slot=1,
+            kind="experience",
+            intent="Background",
+            criterion_ids=[criterion_ids[0]],
+            depth="opening",
         ),
         PlannedQuestion(
-            slot=2, intent="A project", criterion_ids=["python_and_django"], depth="opening"
-        ),
-        PlannedQuestion(
-            slot=3,
-            intent="Their contribution",
-            criterion_ids=["technical_communication"],
+            slot=2,
+            kind="resume",
+            intent="A project from their resume",
+            anchor="the forecasting project",
+            criterion_ids=[criterion_ids[1 % len(criterion_ids)]],
             depth="opening",
         ),
     ]
-    remaining = [
-        c.id
-        for c in rubric.criteria
-        if c.id not in {"relevant_experience", "python_and_django", "technical_communication"}
-    ]
-    slot = 4
-    for criterion_id in remaining:
+
+    for slot in range(PLAN_FIXED_OPENING_SLOTS + 1, total + 1):
+        kind = rotation[(slot - PLAN_FIXED_OPENING_SLOTS - 1) % len(rotation)]
+        # Every criterion has to be probed at least once; the ones past the
+        # rubric's length repeat the last, which coverage allows.
+        criterion = criterion_ids[min(slot - 1, len(criterion_ids) - 1)]
         questions.append(
             PlannedQuestion(
-                slot=slot, intent=f"Probe {criterion_id}", criterion_ids=[criterion_id],
-                depth="probing",
+                slot=slot,
+                kind=kind,
+                intent=f"Probe {criterion}",
+                anchor="their internship" if kind == "resume" else None,
+                criterion_ids=[criterion],
+                depth="probing" if slot < PLAN_MIN_SLOT_FOR_DEEP_DEPTH + 2 else "deep",
             )
         )
-        slot += 1
-    while slot <= total:
-        questions.append(
-            PlannedQuestion(
-                slot=slot, intent="Go deeper", criterion_ids=["system_design"], depth="deep"
-            )
-        )
-        slot += 1
     return InterviewPlan(questions=questions)
 
 
 # --- plan ---------------------------------------------------------------
 
 
-def test_question_count_scales_with_rubric_breadth():
-    """backend.md 5.3: 4 criteria gives 6 questions, 7 gives 9."""
+def test_every_interview_is_the_same_length():
+    """The rubric decides what is asked, not how much.
+
+    A count that scaled with rubric breadth gave a narrow rubric a shorter
+    interview carrying the same hiring decision, and made two candidates
+    incomparable without first checking they were asked the same number of
+    questions.
+    """
     def rubric_with(n: int) -> Rubric:
         base = valid_rubric()
         base.criteria = base.criteria[:1] * n
         return base
 
-    assert planned_question_count(rubric_with(4)) == 6
-    assert planned_question_count(rubric_with(7)) == 9
-    # Clamped at both ends.
-    assert planned_question_count(rubric_with(1)) == PLAN_MIN_QUESTIONS
-    assert planned_question_count(rubric_with(20)) == PLAN_MAX_QUESTIONS
+    for count in (1, 4, 7, 20):
+        assert planned_question_count(rubric_with(count)) == PLAN_TOTAL_QUESTIONS
 
 
 def test_plan_covers_rubric():
@@ -139,19 +158,10 @@ def test_plan_openers_must_be_opening_depth():
 
 
 def test_plan_no_deep_before_settling_in():
-    """A candidate needs a few questions to settle before being pushed.
-
-    With the current constants the opener rule (slots 1 to 3 must be
-    'opening') already covers every slot below PLAN_MIN_SLOT_FOR_DEEP_DEPTH,
-    so the dedicated deep check is defence in depth for if those constants
-    diverge. This asserts the behaviour that matters - an early 'deep' is
-    rejected - without pinning which rule catches it.
-    """
-    assert PLAN_MIN_SLOT_FOR_DEEP_DEPTH <= PLAN_FIXED_OPENING_SLOTS + 1
-
+    """A candidate needs a few questions to settle before being pushed."""
     rubric = valid_rubric()
     plan = _plan(rubric)
-    plan.questions[PLAN_FIXED_OPENING_SLOTS - 1].depth = "deep"
+    plan.questions[PLAN_MIN_SLOT_FOR_DEEP_DEPTH - 2].depth = "deep"
     with pytest.raises(ValidationViolation):
         validate_plan(plan, rubric, planned_question_count(rubric))
 
@@ -173,6 +183,174 @@ def test_plan_unknown_criterion_rejected():
     with pytest.raises(ValidationViolation) as exc:
         validate_plan(plan, rubric, planned_question_count(rubric))
     assert "invented" in exc.value.message
+
+
+# --- plan: question mix -------------------------------------------------
+#
+# Rubric coverage is not enough on its own. A plan can probe every
+# criterion and still be ten technical questions, or ten follow-ups chained
+# to whatever the first answer happened to mention. These are the checks
+# that make the interview test several facets of a person.
+
+
+def test_plan_must_meet_every_kind_minimum():
+    for kind, minimum in PLAN_KIND_MINIMUMS.items():
+        rubric = valid_rubric()
+        plan = _plan(rubric)
+        # Starve this one kind by one, keeping the slot count intact.
+        replaced = 0
+        for question in plan.questions:
+            if question.kind == kind and replaced < 1:
+                question.kind = "followup"
+                question.anchor = None
+                replaced += 1
+        # Only meaningful if the fixture was at or near the floor.
+        if sum(1 for q in plan.questions if q.kind == kind) >= minimum:
+            continue
+        with pytest.raises(ValidationViolation) as exc:
+            validate_plan(plan, rubric, planned_question_count(rubric))
+        assert kind in exc.value.message
+
+
+def test_plan_with_only_technical_questions_rejected():
+    """The failure this exists to catch: a technical rubric planning an
+    interview that tests one facet of a person ten times."""
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    for question in plan.questions[PLAN_FIXED_OPENING_SLOTS:]:
+        question.kind = "technical"
+        question.anchor = None
+    with pytest.raises(ValidationViolation) as exc:
+        validate_plan(plan, rubric, planned_question_count(rubric))
+    assert "in a row" in exc.value.message or "'experience'" in exc.value.message
+
+
+def test_plan_too_many_followups_rejected():
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    changed = 0
+    for question in plan.questions[PLAN_FIXED_OPENING_SLOTS:]:
+        if question.kind != "followup" and changed < PLAN_MAX_FOLLOWUP_SLOTS + 1:
+            question.kind = "followup"
+            question.anchor = None
+            changed += 1
+    with pytest.raises(ValidationViolation) as exc:
+        validate_plan(plan, rubric, planned_question_count(rubric))
+    assert "followup" in exc.value.message
+
+
+def test_plan_may_not_run_one_kind_back_to_back():
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    start = PLAN_FIXED_OPENING_SLOTS
+    for question in plan.questions[start : start + PLAN_MAX_CONSECUTIVE_SAME_KIND + 1]:
+        question.kind = "technical"
+        question.anchor = None
+    with pytest.raises(ValidationViolation) as exc:
+        validate_plan(plan, rubric, planned_question_count(rubric))
+    assert "in a row" in exc.value.message
+
+
+def test_plan_with_no_followups_rejected():
+    """Ten prepared questions is a questionnaire that has read the CV.
+
+    Three or four of the ten are reserved for reacting to what the
+    candidate actually said, so a plan with none is refused the same way a
+    plan with too many is.
+    """
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    for question in plan.questions:
+        if question.kind == "followup":
+            question.kind = "experience"
+    with pytest.raises(ValidationViolation) as exc:
+        validate_plan(plan, rubric, planned_question_count(rubric))
+    assert str(PLAN_MIN_FOLLOWUP_SLOTS) in exc.value.message
+
+
+def test_followup_must_be_anchored_in_the_answer_just_given():
+    """The failure this catches is "tell me more about your experience".
+
+    A follow-up slot that produces a question grounded in nothing has
+    spent one of the interview's three or four reactive slots on a
+    question that would fit any candidate.
+    """
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    next_slot = next(q for q in plan.questions if q.kind == "followup")
+    state = InterviewState.initial(rubric)
+
+    def turn(anchor: str | None) -> TurnResult:
+        return TurnResult(
+            answer_scores=[],
+            topics_identified=["indexing"],
+            claims_made=["Added a composite index on user_id and score"],
+            next_question="How did you check nothing regressed after dropping it?",
+            targets_criterion_ids=[rubric.criteria[0].id],
+            anchored_on_claim=anchor,
+        )
+
+    with pytest.raises(ValidationViolation) as exc:
+        validate_turn(turn(None), rubric, plan.questions[0], state, next_slot, "an answer")
+    assert "anchored_on_claim" in exc.value.message
+
+    # An anchor the candidate never said is as bad as no anchor.
+    with pytest.raises(ValidationViolation):
+        validate_turn(
+            turn("Built a recommender"), rubric, plan.questions[0], state, next_slot, "an answer"
+        )
+
+    # Grounded in a claim actually extracted from this answer: accepted.
+    validate_turn(
+        turn("Added a composite index on user_id and score"),
+        rubric,
+        plan.questions[0],
+        state,
+        next_slot,
+        "an answer",
+    )
+
+
+def test_a_planned_slot_needs_no_anchor():
+    """Only follow-ups are required to build on the previous answer."""
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    technical = next(q for q in plan.questions if q.kind == "technical")
+    validate_turn(
+        TurnResult(
+            answer_scores=[],
+            topics_identified=["indexing"],
+            claims_made=["Added a composite index"],
+            next_question="How do you decide when a query needs an index at all?",
+            targets_criterion_ids=[rubric.criteria[0].id],
+        ),
+        rubric,
+        plan.questions[0],
+        InterviewState.initial(rubric),
+        technical,
+        "an answer",
+    )
+
+
+def test_resume_question_must_name_what_it_is_about():
+    """A resume question with no anchor is a generic question wearing a
+    label. The whole point is that it can say the project's name."""
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    plan.questions[1].anchor = None
+    with pytest.raises(ValidationViolation) as exc:
+        validate_plan(plan, rubric, planned_question_count(rubric))
+    assert "anchor" in exc.value.message
+
+
+def test_non_resume_question_may_not_carry_an_anchor():
+    rubric = valid_rubric()
+    plan = _plan(rubric)
+    technical = next(q for q in plan.questions if q.kind == "technical")
+    technical.anchor = "the forecasting project"
+    with pytest.raises(ValidationViolation) as exc:
+        validate_plan(plan, rubric, planned_question_count(rubric))
+    assert "anchor" in exc.value.message
 
 
 # --- rubric dimensions --------------------------------------------------

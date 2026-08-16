@@ -25,14 +25,21 @@ TOKEN = "test-token"
 
 
 def _plan(rubric, total: int) -> InterviewPlan:
+    """A plan shaped enough to drive the stream.
+
+    Not run through validate_plan: these tests are about stage ordering and
+    the error envelope, and the mix rules are covered in test_interview.py.
+    """
     ids = [c.id for c in rubric.criteria]
-    intents = ["background", "projects", "personal contribution"]
+    kinds = ["experience", "resume", "technical", "followup"]
     questions = [
         PlannedQuestion(
             slot=i + 1,
-            intent=intents[i] if i < 3 else f"probe {ids[i % len(ids)]}",
+            kind=kinds[i % len(kinds)],
+            intent=f"probe {ids[i % len(ids)]}",
+            anchor="their internship" if kinds[i % len(kinds)] == "resume" else None,
             criterion_ids=[ids[i % len(ids)]],
-            depth="opening" if i < 3 else "probing",
+            depth="opening" if i < 2 else "probing",
         )
         for i in range(total)
     ]
@@ -69,7 +76,7 @@ def wired(monkeypatch):
         calls.append("transcribe")
         return "I built a recommendation service at Zoho."
 
-    def fake_advance(rubric_, plan_, state_, slot_, transcript_, is_final_):
+    def fake_advance(rubric_, plan_, state_, slot_, transcript_, is_final_, candidate_=None):
         calls.append("advance_turn")
         return TurnResult(
             answer_scores=[

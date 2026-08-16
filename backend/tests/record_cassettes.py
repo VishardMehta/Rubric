@@ -41,7 +41,7 @@ from app.services.interview import (
     new_token,
     opening_question,
 )
-from app.services.scoring import band_for
+from app.services.scoring import band_for, weighted_screening
 from app.services.screening import screen_candidate
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -178,7 +178,12 @@ def main() -> int:
     logger.info("1/5 rubric")
     from app.api.jobs import _generate_rubric
 
-    job_row = storage.create_job(**GOLDEN_JOB)
+    # Ownerless on purpose. The cassette rows are recorded before any
+    # account exists, and the demo flow test relies on the first registered
+    # account claiming them (test_demo_mode.py). Stamping an owner here
+    # would leave a demo dashboard empty until someone found the right
+    # login.
+    job_row = storage.create_job(**GOLDEN_JOB, owner_id=None)
     rubric = _generate_rubric(
         GOLDEN_JOB["title"],
         GOLDEN_JOB["description"],
@@ -221,18 +226,28 @@ def main() -> int:
         GOLDEN_CANDIDATE["resume_text"],
         GOLDEN_JOB["skills"],
     )
+    final_score = weighted_screening(screening.total_score, screening.voice_total_score)
     storage.save_screening(
         candidate["id"],
-        score=screening.total_score,
-        band=band_for(screening.total_score),
+        score=final_score,
+        band=band_for(final_score),
+        resume_score=screening.total_score,
+        voice_score=screening.voice_total_score,
         sub_scores=[s.model_dump() for s in screening.sub_scores],
+        voice_sub_scores=[s.model_dump() for s in screening.voice_sub_scores],
         matched_skills=screening.matched_skills,
         unevidenced_skills=screening.unevidenced_skills,
         conflicts=screening.resume_intro_conflicts,
         assessment=screening.assessment,
         recommendation=screening.recommendation,
     )
-    logger.info("screened at %d (%s)", screening.total_score, screening.recommendation)
+    logger.info(
+        "screened at %d (resume %d, voice %d, %s)",
+        final_score,
+        screening.total_score,
+        screening.voice_total_score,
+        screening.recommendation,
+    )
 
     logger.info("4/5 interview plan and turns")
     interview = storage.create_interview(candidate["id"], new_token())

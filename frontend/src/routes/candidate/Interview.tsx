@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/primitives";
 import { ErrorState } from "../../components/feedback";
 import { AudioLevelMeter, CameraPreview, MicrophoneBlocked, VoiceOrb } from "../../components/domain";
+import type { CameraState } from "../../components/domain";
 import type { OrbState } from "../../components/domain";
 import { api, ApiError, submitAnswerStreaming } from "../../api/client";
 import type { InterviewSession, TurnStage } from "../../api/client";
@@ -68,6 +69,12 @@ export function InterviewPage() {
   const [entering, setEntering] = useState(false);
 
   const [impulse, setImpulse] = useState(0);
+  const [cameraSettled, setCameraSettled] = useState(false);
+  // Checked once, before the first question. The interview shows a live
+  // picture throughout, so a camera that was never going to work should
+  // fail here rather than four questions in.
+  const [cameraStatus, setCameraStatus] = useState<CameraState>("loading");
+  const settleCamera = useCallback(() => setCameraSettled(true), []);
   // The orb is a canvas with a real pixel size, so a CSS media query
   // cannot shrink it without blurring the backing store. It is measured
   // here and re-created at the right resolution instead.
@@ -238,6 +245,9 @@ export function InterviewPage() {
   }, [recorder, submit]);
 
   const handleStart = useCallback(async () => {
+    // Belt and braces. The control is disabled until the camera is up, so
+    // this only fires if something re-enabled it.
+    if (cameraStatus !== "ready") return;
     setPhase("processing");
     setStageLabel("Preparing your first question");
     try {
@@ -252,7 +262,7 @@ export function InterviewPage() {
       );
       setPhase("invalid");
     }
-  }, [token]);
+  }, [token, cameraStatus]);
 
   const retryAnswer = useCallback(() => {
     recorder.reset();
@@ -315,6 +325,9 @@ export function InterviewPage() {
   }
 
   if (phase === "ready") {
+    const cameraReady = cameraStatus === "ready";
+    const cameraBlocked = cameraStatus === "unavailable";
+
     return (
       <Frame>
         <div className="rb-interview__ready">
@@ -326,9 +339,29 @@ export function InterviewPage() {
             way to go back.
           </p>
           <p className="text-body-lg rb-interview__intro">
-            Find somewhere quiet. Your microphone stays on for the whole
-            interview.
+            Find somewhere quiet. Your microphone and camera stay on for the
+            whole interview.
           </p>
+
+          {/* The readiness check, and the reason this screen exists before
+              question one. The preview doubles as the framing aid: what
+              they see here is what the camera will show throughout. */}
+          <div className="rb-interview__ready-check">
+            <CameraPreview onStatus={setCameraStatus} />
+            <p
+              className={`rb-interview__ready-status${
+                cameraBlocked ? " rb-interview__ready-status--blocked" : ""
+              }`}
+              role="status"
+            >
+              {cameraReady
+                ? "Camera ready."
+                : cameraBlocked
+                  ? "Camera access is required for this interview. Allow the camera in your browser's address bar, then reload this page."
+                  : "Waiting for camera access. Choose Allow when your browser asks."}
+            </p>
+          </div>
+
           <div className="rb-interview__ready-orb" aria-hidden="true">
             <VoiceOrb state="idle" analyser={recorder.analyser} size={160} />
           </div>
@@ -337,9 +370,10 @@ export function InterviewPage() {
               level="primary"
               size="large"
               onClick={handleStart}
+              disabled={!cameraReady}
               loading={recorder.status === "requesting"}
             >
-              Start interview
+              {cameraReady ? "Start interview" : "Waiting for camera"}
             </Button>
           </div>
         </div>
@@ -392,8 +426,8 @@ export function InterviewPage() {
 
         {/* The control region is a fixed height so replacing the button
             with a status label causes no layout shift (screens.md stage 3). */}
-        <div className="rb-interview__presence">
-          <CameraPreview />
+        <div className={`rb-interview__presence${cameraSettled ? " rb-interview__presence--camera-settled" : ""}`}>
+          <CameraPreview onSettled={settleCamera} />
           <div className={`rb-interview__orb rb-interview__orb--${orbState}`}>
             <VoiceOrb
               state={orbState}

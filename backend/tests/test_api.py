@@ -177,6 +177,52 @@ def test_public_apply_summary_exposes_role_context_but_never_the_rubric(client, 
     assert "python_and_django" not in response.text
 
 
+def test_open_roles_are_flagged_with_whether_this_address_applied(client, monkeypatch):
+    """Explore shows what is still open to someone, and it may not guess.
+
+    Applying twice violates the unique constraint on (job_id, email) and
+    comes back as `already_applied`, so a role the portal still offered
+    would be a button that cannot work. The flag is read from that same
+    relationship rather than tracked in the browser.
+    """
+    rubric = valid_rubric()
+    rows = [
+        {**_active_row(rubric.model_dump()), "id": "job-1"},
+        {**_active_row(rubric.model_dump()), "id": "job-2"},
+    ]
+    monkeypatch.setattr(jobs_api.storage, "list_jobs", lambda owner_id=None: rows)
+    monkeypatch.setattr(
+        jobs_api.storage,
+        "list_candidates_by_email",
+        lambda email: [{"job_id": "job-1"}] if email == "priya@example.com" else [],
+    )
+
+    applied = {
+        row["id"]: row["applied"]
+        for row in client.get("/api/apply?email=priya@example.com").json()
+    }
+    assert applied == {"job-1": True, "job-2": False}
+
+    # An anonymous browse claims nothing: nobody has applied as nobody.
+    anonymous = {row["id"]: row["applied"] for row in client.get("/api/apply").json()}
+    assert anonymous == {"job-1": False, "job-2": False}
+
+
+def test_a_role_page_knows_the_reader_already_applied(client, monkeypatch):
+    """So it can offer their application instead of a second one."""
+    rubric = valid_rubric()
+    monkeypatch.setattr(
+        jobs_api.storage, "get_job", lambda job_id: _active_row(rubric.model_dump())
+    )
+    monkeypatch.setattr(
+        jobs_api.storage, "list_candidates_by_email", lambda email: [{"job_id": "job-1"}]
+    )
+
+    assert client.get("/api/apply/job-1?email=priya@example.com").json()["applied"] is True
+    # The link stays shareable: a stranger opening it still gets the role.
+    assert client.get("/api/apply/job-1").json()["applied"] is False
+
+
 def test_job_description_pdf_is_extracted_for_hr_review(client, monkeypatch):
     """The uploaded PDF is read into an editable field; it is not persisted."""
     monkeypatch.setattr(

@@ -29,22 +29,58 @@
   background: var(--color-canvas);
 }
 
+/*
+ * One icon column, shared by every row in the sidebar.
+ *
+ * The rail is a fixed 40px cell at a fixed inset, and the brand mark, each
+ * nav icon and the profile avatar are centred inside it. Collapsing changes
+ * the sidebar width and nothing else: the second column has a `minmax(0,
+ * 1fr)` track, so it goes to zero on its own and the labels are clipped by
+ * the row rather than repositioned.
+ *
+ * This replaces centring the icons in compact mode, which moved every one
+ * of them 12px left as the sidebar shrank and read as the navigation being
+ * rebuilt rather than the sidebar closing.
+ *
+ * The arithmetic that has to hold: --layout-hr-sidebar-compact equals the
+ * horizontal padding, plus the 40px rail, plus the same padding again.
+ */
 .rb-hr-shell__sidebar {
   flex: 0 0 var(--layout-hr-sidebar-width);
   width: var(--layout-hr-sidebar-width);
   display: flex;
   flex-direction: column;
-  gap: var(--space-10);
-  padding: var(--space-6);
+  /* Spacing is per block below, so `margin-top: auto` on the utility nav
+     can push Settings to the bottom without fighting a flex gap. */
+  gap: 0;
+  padding: var(--space-6) var(--space-4);
   background: var(--color-surface);
   border-right: 1px solid var(--color-hairline);
   position: sticky;
   top: 0;
   height: 100vh;
+  /* Padding is identical in both states, so only the width animates. */
   transition:
     width var(--duration-base) var(--ease-standard),
-    flex-basis var(--duration-base) var(--ease-standard),
-    padding var(--duration-base) var(--ease-standard);
+    flex-basis var(--duration-base) var(--ease-standard);
+}
+
+/* Every row in the sidebar: rail cell, then whatever the row says. */
+.rb-hr-shell__brand,
+.rb-hr-shell__profile,
+.rb-nav-item {
+  display: grid;
+  grid-template-columns: var(--layout-hr-sidebar-rail) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-2);
+  /* What makes the collapse a clip rather than a reflow. */
+  overflow: hidden;
+}
+
+.rb-hr-shell__brand > *:first-child,
+.rb-hr-shell__profile > *:first-child,
+.rb-nav-item > svg {
+  justify-self: center;
 }
 
 .rb-hr-shell__workspace-card {
@@ -54,9 +90,6 @@
 }
 
 .rb-hr-shell__brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
   color: inherit;
   text-decoration: none;
 }
@@ -127,13 +160,18 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  margin-top: var(--space-6);
 }
 
+/* Anchored to the bottom in both states: `auto` here takes every pixel of
+   free space above it, so Settings and the profile sit on the floor of the
+   sidebar whether it is 240px or 72px wide. */
 .rb-hr-shell__utility {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   margin-top: auto;
+  padding-top: var(--space-6);
 }
 
 .rb-hr-shell__nav-label {
@@ -146,12 +184,12 @@
   text-transform: uppercase;
 }
 
+/* Directly under Settings, which is what `margin-top: auto` up there has
+   already pushed to the bottom. */
 .rb-hr-shell__profile {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-  padding-top: var(--space-5);
+  grid-template-columns: var(--layout-hr-sidebar-rail) minmax(0, 1fr) auto;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--color-hairline);
 }
 
@@ -180,11 +218,11 @@
 }
 
 .rb-nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: 36px;
-  padding: 0 var(--space-3);
+  height: 40px;
+  /* No horizontal padding: the rail cell above provides the inset, so the
+     active background can span the full row and still leave the icon on
+     the same X in both states. */
+  padding: 0;
   border-radius: var(--radius-sm);
   color: var(--color-ink-secondary);
   text-decoration: none;
@@ -208,8 +246,18 @@
   font-weight: var(--text-body-strong-weight);
 }
 
-.rb-nav-item__label {
+/* Fades as the row clips it, so a half-cut word is never the resting
+   state at either end of the animation. */
+.rb-nav-item__label,
+.rb-hr-shell__brand-copy,
+.rb-hr-shell__profile-copy {
   white-space: nowrap;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.rb-nav-item__label {
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .rb-hr-shell__main {
@@ -224,60 +272,48 @@
 }
 
 @media (min-width: 768px) {
-  /* Compact mode is an explicit choice, not a screen-size side effect. The
-     labels remain available as native title tooltips and screen-reader text. */
+  /* Compact mode is an explicit choice, not a screen-size side effect.
+     The labels remain available as native title tooltips and to screen
+     readers: they are clipped by the row, not removed from the tree.
+
+     Note what is *not* here. No rule repositions an icon, changes a nav
+     item's padding, or centres the sidebar's contents. The rail column
+     already puts every icon at the same X, so collapsing is one width
+     change and the rows fall into place on their own. */
   .rb-hr-shell--compact .rb-hr-shell__sidebar {
     flex-basis: var(--layout-hr-sidebar-compact);
     width: var(--layout-hr-sidebar-compact);
-    padding: var(--space-5) var(--space-3);
-    align-items: center;
   }
 
-  .rb-hr-shell--compact .rb-hr-shell__workspace,
-  .rb-hr-shell--compact .rb-hr-shell__profile,
   .rb-hr-shell--compact .rb-hr-shell__nav-label {
+    /* An uppercase section label has nothing to label once the items are
+       icons, and it is the one row with no rail cell to hold a position. */
     display: none;
   }
 
+  .rb-hr-shell--compact .rb-nav-item__label,
+  .rb-hr-shell--compact .rb-hr-shell__brand-copy,
+  .rb-hr-shell--compact .rb-hr-shell__profile-copy {
+    opacity: 0;
+  }
+
+  /* The collapse control gets its own row under the mark instead of
+     sitting on top of it. Centred on the same rail, so it lines up with
+     every icon below it. */
   .rb-hr-shell--compact .rb-hr-shell__workspace-card {
-    padding-bottom: 0;
-    border: 0;
-  }
-
-  .rb-hr-shell--compact .rb-hr-shell__brand-copy {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .rb-hr-shell--compact .rb-hr-shell__mark {
-    width: 28px;
-    height: 28px;
+    display: flex;
+    flex-direction: column;
+    /* stretch, not center: the brand has to stay full width so its own
+       rail cell is what centres the mark, the same as every row below. */
+    align-items: stretch;
+    gap: var(--space-3);
+    padding-bottom: var(--space-4);
   }
 
   .rb-hr-shell--compact .rb-hr-shell__collapse {
     position: static;
-    margin-top: var(--space-2);
+    align-self: center;
   }
-
-  .rb-hr-shell--compact .rb-nav-item {
-    justify-content: center;
-    padding: 0;
-    width: 40px;
-  }
-
-  .rb-hr-shell--compact .rb-nav-item__label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
 }
 
 @media (min-width: 768px) and (max-width: 1179px) {
@@ -322,11 +358,20 @@
   .rb-hr-shell__nav {
     flex-direction: row;
     flex: 1 1 auto;
+    margin-top: 0;
     overflow-x: auto;
   }
 
-  .rb-hr-shell__utility { margin: 0 0 0 auto; }
-  .rb-hr-shell__utility .rb-nav-item { padding: 0 var(--space-2); }
+  /* The bar has no bottom to anchor to, so the rail column and the auto
+     margin both come off and the items pack to their content. */
+  .rb-hr-shell__utility { margin: 0 0 0 auto; padding-top: 0; }
+
+  .rb-nav-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-2);
+    padding: 0 var(--space-3);
+  }
+
   .rb-hr-shell__collapse { display: none; }
 
   .rb-hr-shell__main {
@@ -369,6 +414,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
+}
+
+/* Must come after the base rule: same specificity, so source order is
+   what decides which max-width wins. */
+.rb-candidate-shell__content--wide {
+  max-width: 1040px;
 }
 
 /* --- PageHeader ---------------------------------------------------------- */

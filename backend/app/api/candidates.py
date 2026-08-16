@@ -25,7 +25,7 @@ from app.models import (
 )
 from app.services.interview import new_token
 from app.services.resume_profile import build_resume_profile
-from app.services.scoring import band_for
+from app.services.scoring import band_for, weighted_screening
 from app.services.screening import screen_candidate
 
 logger = logging.getLogger("rubric.api.candidates")
@@ -34,7 +34,10 @@ router = APIRouter(tags=["candidates"])
 
 
 def _summary(
-    row: dict, skills_total: int, interview: dict | None = None
+    row: dict,
+    skills_total: int,
+    interview: dict | None = None,
+    job_title: str | None = None,
 ) -> CandidateSummary:
     interview = interview or {}
     return CandidateSummary(
@@ -51,17 +54,25 @@ def _summary(
         interview_status=interview.get("status"),
         interview_score=interview.get("overall_score"),
         interview_band=interview.get("band"),
+        job_id=row.get("job_id"),
+        job_title=job_title,
     )
 
 
-def _sub_scores_out(row: dict, rubric: Rubric | None) -> list[SubScoreOut]:
+def _sub_scores_out(
+    row: dict, rubric: Rubric | None, column: str = "sub_scores"
+) -> list[SubScoreOut]:
     """Join stored sub-scores to their rubric names.
 
     Done here rather than in the browser so the frontend never has to
     reconcile a score against a rubric it fetched separately.
+
+    `column` selects which component: `sub_scores` is the resume scoring,
+    `voice_sub_scores` the introduction scoring. Same shape, same rubric,
+    different source.
     """
     out: list[SubScoreOut] = []
-    for entry in row.get("sub_scores") or []:
+    for entry in row.get(column) or []:
         criterion_id = entry.get("criterion_id", "")
         criterion = rubric.by_id(criterion_id) if rubric else None
         out.append(
@@ -134,7 +145,45 @@ async def list_candidates(
     # pipeline stage and shows interview scores at the top, and an N+1 here
     # would be one round trip per applicant.
     interviews = storage.interview_summaries([row["id"] for row in rows])
-    return [_summary(row, skills_total, interviews.get(row["id"])) for row in rows]
+    return [
+        _summary(row, skills_total, interviews.get(row["id"]), job.get("title"))
+        for row in rows
+    ]
+
+
+@router.get("/candidates", response_model=list[CandidateSummary])
+async def list_all_candidates(
+    hr: HRUser = Depends(require_hr),
+) -> list[CandidateSummary]:
+    """Every applicant across the signed-in account's roles.
+
+    The cross-role directory used to build this in the browser: list the
+    jobs, then one request per job, each of which ran four queries of its
+    own. Six roles meant seven requests and around twenty-five queries to
+    paint one table. This is three queries and one request.
+
+    Owner scoping is the same rule as everywhere else, applied once at the
+    top: the job ids come from `list_jobs(owner_id)`, so a candidate whose
+    job this account does not own is never in the set to begin with.
+    """
+    jobs = storage.list_jobs(owner_id=hr.id)
+    if not jobs:
+        return []
+
+    skills_total = {job["id"]: len(job.get("skills") or []) for job in jobs}
+    titles = {job["id"]: job.get("title") for job in jobs}
+
+    rows = storage.list_candidates_for_jobs(list(skills_total))
+    interviews = storage.interview_summaries([row["id"] for row in rows])
+    return [
+        _summary(
+            row,
+            skills_total.get(row["job_id"], 0),
+            interviews.get(row["id"]),
+            titles.get(row["job_id"]),
+        )
+        for row in rows
+    ]
 
 
 @router.get("/candidates/{candidate_id}", response_model=CandidateDetail)
@@ -163,7 +212,10 @@ async def get_candidate(
         screening_score=row.get("screening_score"),
         screening_band=row.get("screening_band"),
         recommendation=row.get("recommendation"),
+        resume_score=row.get("resume_score"),
+        voice_score=row.get("voice_score"),
         sub_scores=_sub_scores_out(row, rubric),
+        voice_sub_scores=_sub_scores_out(row, rubric, "voice_sub_scores"),
         matched_skills=row.get("matched_skills") or [],
         unevidenced_skills=row.get("unevidenced_skills") or [],
         resume_intro_conflicts=row.get("resume_intro_conflicts") or [],
@@ -249,11 +301,18 @@ async def rescreen_candidate(
         logger.exception("rescreen failed for candidate %s", candidate_id)
         raise ScreeningFailed() from None
 
+    # Same weighting as the original screening, from the one function that
+    # knows it. A rescreen that scored differently from a first screen
+    # would make two candidates on the same job incomparable.
+    final_score = weighted_screening(result.total_score, result.voice_total_score)
     storage.save_screening(
         candidate_id,
-        score=result.total_score,
-        band=band_for(result.total_score),
+        score=final_score,
+        band=band_for(final_score),
+        resume_score=result.total_score,
+        voice_score=result.voice_total_score,
         sub_scores=[s.model_dump() for s in result.sub_scores],
+        voice_sub_scores=[s.model_dump() for s in result.voice_sub_scores],
         matched_skills=result.matched_skills,
         unevidenced_skills=result.unevidenced_skills,
         conflicts=result.resume_intro_conflicts,

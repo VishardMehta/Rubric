@@ -13,6 +13,7 @@ wrong answer.
 
 from __future__ import annotations
 
+import collections
 import itertools
 import re
 
@@ -24,6 +25,10 @@ from app.core.heuristics import (
     JOB_FACTS_MAX_SKILLS,
     JOB_FACTS_MIN_DESCRIPTION_CHARS,
     PLAN_FIXED_OPENING_SLOTS,
+    PLAN_KIND_MINIMUMS,
+    PLAN_MAX_CONSECUTIVE_SAME_KIND,
+    PLAN_MAX_FOLLOWUP_SLOTS,
+    PLAN_MIN_FOLLOWUP_SLOTS,
     PLAN_MIN_SLOT_FOR_DEEP_DEPTH,
     QUESTION_SIMILARITY_THRESHOLD,
     RESUME_PROFILE_MAX_HIGHLIGHTS,
@@ -42,6 +47,7 @@ from app.models import (
     ResumeProfile,
     Rubric,
     Screening,
+    SubScore,
     TurnResult,
 )
 from app.services.similarity import most_similar_prior
@@ -149,21 +155,66 @@ def validate_screening(
     model invented support for a score it had already decided on, which is
     exactly the failure mode the sub-score discipline exists to prevent.
     """
-    scored_ids = [s.criterion_id for s in screening.sub_scores]
+    normalised_sources = {
+        "introduction": _normalise(transcript),
+        "resume": _normalise(resume_text),
+    }
+    _validate_component(
+        screening.sub_scores,
+        screening.total_score,
+        rubric,
+        normalised_sources,
+        label="resume",
+        required_source="resume",
+    )
+    _validate_component(
+        screening.voice_sub_scores,
+        screening.voice_total_score,
+        rubric,
+        normalised_sources,
+        label="voice",
+        required_source="introduction",
+    )
+
+    if not screening.assessment.strip():
+        raise ValidationViolation(
+            "The assessment is empty. Write three to five sentences on what the "
+            "evidence showed against the rubric."
+        )
+
+
+def _validate_component(
+    sub_scores: list[SubScore],
+    reported_total: int,
+    rubric: Rubric,
+    normalised_sources: dict[str, str],
+    *,
+    label: str,
+    required_source: str,
+) -> None:
+    """One full scoring of the rubric, from one source.
+
+    Both components go through this, so the voice score is held to the
+    same evidence and sum discipline as the resume score rather than being
+    a looser number bolted on beside it.
+    """
+    scored_ids = [s.criterion_id for s in sub_scores]
     rubric_ids = rubric.criterion_ids()
 
     unknown = [i for i in scored_ids if i not in rubric_ids]
     if unknown:
         raise ValidationViolation(
-            f"These criterion ids are not in the rubric: {sorted(set(unknown))}. "
+            f"In the {label} component these criterion ids are not in the "
+            f"rubric: {sorted(set(unknown))}. "
             f"Score exactly the rubric criteria: {sorted(rubric_ids)}."
         )
 
     missing = sorted(rubric_ids - set(scored_ids))
     if missing:
         raise ValidationViolation(
-            f"You did not score these criteria: {missing}. Return one entry per "
-            "rubric criterion, scoring 0 where the sources show nothing."
+            f"The {label} component did not score these criteria: {missing}. "
+            "Return one entry per rubric criterion in each component, scoring 0 "
+            "where that source shows nothing."
         )
 
     duplicates = {i for i in scored_ids if scored_ids.count(i) > 1}
@@ -173,12 +224,7 @@ def validate_screening(
             "Return exactly one entry per criterion."
         )
 
-    normalised_sources = {
-        "introduction": _normalise(transcript),
-        "resume": _normalise(resume_text),
-    }
-
-    for sub in screening.sub_scores:
+    for sub in sub_scores:
         criterion = rubric.by_id(sub.criterion_id)
         assert criterion is not None  # guaranteed by the unknown-id check above
 
@@ -203,6 +249,14 @@ def validate_screening(
             )
 
         for item in sub.evidence:
+            if item.source != required_source:
+                raise ValidationViolation(
+                    f"In the {label} component you tagged an evidence quote for "
+                    f"{sub.criterion_id} as '{item.source}'. That component is "
+                    f"scored from the {required_source} alone, so every quote in "
+                    f"it must be tagged '{required_source}'. Move anything from "
+                    "the other source into the other component."
+                )
             haystack = normalised_sources[item.source]
             needle = _normalise(item.quote)
             if not needle:
@@ -241,29 +295,91 @@ def validate_screening(
                     f"the {item.source}.{hint}"
                 )
 
-    total = sum(s.points_awarded for s in screening.sub_scores)
-    if total != screening.total_score:
+    total = sum(s.points_awarded for s in sub_scores)
+    if total != reported_total:
         breakdown = ", ".join(
-            f"{s.criterion_id}={s.points_awarded}" for s in screening.sub_scores
+            f"{s.criterion_id}={s.points_awarded}" for s in sub_scores
         )
         raise ValidationViolation(
-            f"Your sub-scores add up to {total}, but you reported a total of "
-            f"{screening.total_score}. You awarded {breakdown}. Restate the "
+            f"Your {label} sub-scores add up to {total}, but you reported a total of "
+            f"{reported_total}. You awarded {breakdown}. Restate the "
             "total so it equals the sum."
         )
-
-    if not screening.assessment.strip():
-        raise ValidationViolation(
-            "The assessment is empty. Write three to five sentences on what the "
-            "evidence showed against the rubric."
-        )
-
 
 # ---------------------------------------------------------------------
 # Stage 3: interview plan. backend.md 5.3
 # ---------------------------------------------------------------------
 
 _DEPTH_ORDER = {"opening": 0, "probing": 1, "deep": 2}
+
+
+def _validate_plan_mix(ordered: list[PlannedQuestion]) -> None:
+    """The interview has to test several facets of a person, not one facet
+    ten times.
+
+    Left to itself the planner writes a coherent, monotonous interview: ten
+    technical slots for a technical rubric, or a follow-up in every slot
+    that chases whatever the first answer happened to mention. Neither is
+    caught by rubric coverage, because both can cover every criterion.
+
+    Every message here names the fix rather than the rule, because the
+    model reads it as the retry instruction.
+    """
+    counts = collections.Counter(q.kind for q in ordered)
+
+    run_kind = None
+    run_length = 0
+    for question in ordered:
+        run_length = run_length + 1 if question.kind == run_kind else 1
+        run_kind = question.kind
+        if run_length > PLAN_MAX_CONSECUTIVE_SAME_KIND:
+            raise ValidationViolation(
+                f"Slots up to {question.slot} are {run_length} '{question.kind}' "
+                f"questions in a row, more than the {PLAN_MAX_CONSECUTIVE_SAME_KIND} "
+                "allowed. Interleave the kinds so the interview moves between them."
+            )
+
+    for kind, minimum in PLAN_KIND_MINIMUMS.items():
+        if counts[kind] < minimum:
+            raise ValidationViolation(
+                f"Only {counts[kind]} of your {len(ordered)} slots are '{kind}' "
+                f"questions; at least {minimum} must be. Re-plan so the interview "
+                f"covers what they have built, what they know and how they work. "
+                f"Current mix: {dict(counts)}."
+            )
+
+    if counts["followup"] > PLAN_MAX_FOLLOWUP_SLOTS:
+        raise ValidationViolation(
+            f"You planned {counts['followup']} 'followup' slots, more than the "
+            f"{PLAN_MAX_FOLLOWUP_SLOTS} allowed. A follow-up chains to whatever "
+            "the previous answer said, so too many of them turn the interview "
+            "into one thread. Change the extra ones to 'resume', 'technical' or "
+            "'experience'."
+        )
+
+    # The floor matters as much as the ceiling: an interview of ten prepared
+    # questions is a questionnaire that happens to have read the CV.
+    if counts["followup"] < PLAN_MIN_FOLLOWUP_SLOTS:
+        raise ValidationViolation(
+            f"You planned only {counts['followup']} 'followup' slots. At least "
+            f"{PLAN_MIN_FOLLOWUP_SLOTS} of the {len(ordered)} must be, so the "
+            "interview reacts to what the candidate actually says rather than "
+            "running a prepared list. Mark the slots where an answer is most "
+            "likely to be worth pressing on."
+        )
+
+    for question in ordered:
+        if question.kind == "resume" and not (question.anchor or "").strip():
+            raise ValidationViolation(
+                f"Slot {question.slot} is a 'resume' question with no anchor. Name "
+                "the project, employer, tool or course from their resume that the "
+                "question is about, so it can be mentioned by name."
+            )
+        if question.kind != "resume" and (question.anchor or "").strip():
+            raise ValidationViolation(
+                f"Slot {question.slot} is a '{question.kind}' question but sets an "
+                "anchor. Only 'resume' slots take one; leave it null here."
+            )
 
 
 def validate_plan(plan: InterviewPlan, rubric: Rubric, total_questions: int) -> None:
@@ -320,6 +436,8 @@ def validate_plan(plan: InterviewPlan, rubric: Rubric, total_questions: int) -> 
                 "drop back."
             )
 
+    _validate_plan_mix(ordered)
+
     planned = {c for q in plan.questions for c in q.criterion_ids}
     uncovered = sorted(rubric_ids - planned)
     if uncovered:
@@ -341,6 +459,7 @@ def validate_turn(
     answered_slot: PlannedQuestion | None,
     state,
     next_slot: PlannedQuestion | None = None,
+    answer: str = "",
 ) -> None:
     rubric_ids = rubric.criterion_ids()
 
@@ -380,6 +499,38 @@ def validate_turn(
         raise ValidationViolation(
             f"The next question targets criteria not in the rubric: {unknown}."
         )
+
+    # A follow-up slot that produced a question grounded in nothing is the
+    # exact failure this kind exists to prevent: it reads as "tell me more
+    # about your experience" and wastes one of the three or four slots the
+    # interview reserves for actually reacting to the candidate.
+    #
+    # The claim has to have come from the answer just given, which is why it
+    # is checked against this turn's own extraction rather than against the
+    # accumulated state: a question anchored on something said four answers
+    # ago is not a follow-up.
+    if (
+        next_slot is not None
+        and next_slot.kind == "followup"
+        and answer.strip()
+        and result.claims_made
+    ):
+        anchor = (result.anchored_on_claim or "").strip()
+        if not anchor:
+            raise ValidationViolation(
+                "This slot is a 'followup' but you left anchored_on_claim empty. "
+                "Build the question on one concrete thing from the answer you "
+                f"just scored - you extracted {result.claims_made!r} - name that "
+                "thing in the question, and copy the claim into "
+                "anchored_on_claim."
+            )
+        if anchor not in result.claims_made:
+            raise ValidationViolation(
+                f"You anchored the follow-up on {anchor!r}, which is not one of "
+                f"the claims you extracted from this answer: {result.claims_made!r}. "
+                "A follow-up has to build on what the candidate just said. Copy "
+                "one of those claims exactly."
+            )
 
     # Repetition guard. The state is what prevents topic level repetition;
     # this catches the narrower case of near identical wording.

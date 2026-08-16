@@ -25,8 +25,10 @@ import pytest
 
 from app import cassettes
 from app.core.config import Settings, get_settings
+from app.core.heuristics import PLAN_TOTAL_QUESTIONS
 from app.integrations import storage
 from app.integrations.demo_supabase import DemoClient
+from app.services.scoring import weighted_screening
 
 
 class NetworkUsed(AssertionError):
@@ -379,15 +381,28 @@ def test_the_whole_demo_flow_serves_offline_from_real_cassettes(offline, demo_re
     assert candidate["screening_band"] in ("strong", "borderline", "weak")
 
     full = client.get(f"/api/candidates/{candidate['id']}").json()
-    # The sub-scores sum to the reported total. The invariant CLAUDE.md is
-    # built around, checked on the row a demo actually renders.
-    assert sum(s["points_awarded"] for s in full["sub_scores"]) == full["screening_score"]
+    # The invariant CLAUDE.md is built around, checked on the row a demo
+    # actually renders. Each component's sub-scores sum to that component,
+    # and the headline score is the weighted combination of the two - so
+    # the chain from quoted evidence to the number on screen is unbroken.
+    assert sum(s["points_awarded"] for s in full["sub_scores"]) == full["resume_score"]
+    assert (
+        sum(s["points_awarded"] for s in full["voice_sub_scores"])
+        == full["voice_score"]
+    )
+    assert full["screening_score"] == weighted_screening(
+        full["resume_score"], full["voice_score"]
+    )
     assert full["interview_token"]
 
     result = client.get(f"/api/candidates/{candidate['id']}/interview").json()
     assert result["status"] == "evaluated"
     assert result["overall_score"] is not None
-    assert len(result["turns"]) == 7
+    # Every interview is PLAN_TOTAL_QUESTIONS long, so the golden one is
+    # too. Read from the constant rather than pinned at a literal: a
+    # recorded cassette that disagrees with the planner is the exact drift
+    # this test exists to catch.
+    assert len(result["turns"]) == PLAN_TOTAL_QUESTIONS
     assert all(turn["answer_text"] for turn in result["turns"])
 
     # The candidate-facing side of the same interview link.

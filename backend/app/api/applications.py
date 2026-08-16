@@ -108,10 +108,15 @@ async def list_applications(
         logger.warning("DEMO_AUTH: %s has no applications, showing all", normalised)
         rows = storage.list_all_candidates()
 
+    # Three queries for the whole list, not two per row. This screen loads
+    # on arrival now that the portal knows who is looking, so the round
+    # trips were happening while the candidate watched a spinner.
+    titles = storage.job_titles([row["job_id"] for row in rows])
+    invitations = storage.invitations_by_candidate([row["id"] for row in rows])
+
     out: list[CandidateApplication] = []
     for row in rows:
-        job = storage.get_job(row["job_id"])
-        interview = storage.get_interview_by_candidate(row["id"])
+        interview = invitations.get(row["id"])
         status, label, detail = _status(row["state"], interview)
 
         # The link appears only once HR has actually sent it, and is
@@ -129,7 +134,7 @@ async def list_applications(
             CandidateApplication(
                 candidate_id=row["id"],
                 job_id=row["job_id"],
-                job_title=(job or {}).get("title") or "This role",
+                job_title=titles.get(row["job_id"]) or "This role",
                 applied_at=row["created_at"],
                 status=status,
                 status_label=label,

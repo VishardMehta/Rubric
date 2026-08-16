@@ -93,8 +93,7 @@ a.rb-joblist__row:hover {
 .rb-dashboard__summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--color-hairline);
-  border-bottom: 1px solid var(--color-hairline);
+  gap: var(--space-3);
 }
 
 .rb-dashboard__metric {
@@ -103,6 +102,10 @@ a.rb-joblist__row:hover {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-5) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .rb-dashboard__metric + .rb-dashboard__metric {
@@ -138,6 +141,78 @@ a.rb-joblist__row:hover {
 
 .rb-dashboard__title { margin-top: var(--space-1); }
 
+.rb-overview-pulse {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.7fr);
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.rb-overview-pulse__pipeline { padding: var(--space-6); }
+
+.rb-overview-pulse__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-overview-pulse__heading p,
+.rb-overview-pulse__heading h2,
+.rb-overview-pulse__heading > span { margin: 0; }
+.rb-overview-pulse__heading h2 { margin-top: var(--space-1); }
+
+.rb-overview-pulse__stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.rb-overview-pulse__stage {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-caption-size);
+}
+
+.rb-overview-pulse__stage > div {
+  height: 7px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+}
+
+.rb-overview-pulse__stage i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width var(--duration-slow) var(--ease-entrance);
+}
+
+.rb-overview-pulse__stage strong { color: var(--color-ink); text-align: right; }
+
+.rb-overview-pulse__focus {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--color-accent-tint);
+  border-left: 1px solid var(--color-hairline);
+}
+
+.rb-overview-pulse__focus p,
+.rb-overview-pulse__focus strong { margin: 0; }
+.rb-overview-pulse__focus strong { color: var(--color-ink); font-size: var(--text-title-2-size); letter-spacing: var(--text-title-2-letter-spacing); }
+.rb-overview-pulse__focus > p:last-child { color: var(--color-ink-secondary); font-size: var(--text-caption-size); line-height: var(--text-caption-line-height); }
+
 /* --- Create Job ---------------------------------------------------------- */
 
 .rb-createjob__form {
@@ -170,8 +245,22 @@ a.rb-joblist__row:hover {
 
 .rb-createjob__field-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-5);
+  /* minmax(0, 1fr) rather than 1fr: a long placeholder or option label
+     would otherwise widen its own column past its half. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-5);
+  row-gap: var(--space-5);
+  align-items: start;
+}
+
+/* Two of these four labels wrap at this column width and two do not
+   ("Team or department (optional)" wraps, "Location (optional)" fits), so
+   their inputs sat 25px apart and the section read as misaligned.
+   Reserving two lines for every label in this grid lines the four inputs
+   up on two rows without touching any label text. */
+.rb-createjob__field-grid .rb-field__label {
+  display: block;
+  min-height: calc(2em * var(--text-body-strong-line-height));
 }
 
 .rb-createjob__document {
@@ -296,8 +385,8 @@ a.rb-joblist__row:hover {
 
   .rb-dashboard__metric { padding: var(--space-4); }
 
-  .rb-dashboard__metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--color-hairline); }
-  .rb-dashboard__metric:nth-child(4) { border-top: 1px solid var(--color-hairline); }
+  .rb-overview-pulse { grid-template-columns: 1fr; }
+  .rb-overview-pulse__focus { border-top: 1px solid var(--color-hairline); border-left: 0; }
 
   .rb-dashboard__jobs-heading {
     align-items: flex-start;
@@ -342,14 +431,36 @@ a.rb-joblist__row:hover {
 .rb-directory__list {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--color-hairline);
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
+.rb-directory__head,
 .rb-directory__row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) minmax(180px, 1.4fr) 52px minmax(150px, auto) auto;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(220px, 1.45fr) 84px minmax(136px, 0.76fr) 112px;
   align-items: center;
   gap: var(--space-5);
+}
+
+.rb-directory__head {
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  background: var(--color-accent-tint);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-label-size);
+  font-weight: var(--text-label-weight);
+  letter-spacing: var(--text-label-letter-spacing);
+  text-transform: uppercase;
+}
+
+.rb-directory__head span:nth-child(3),
+.rb-directory__head span:last-child { text-align: right; }
+
+.rb-directory__row {
   padding: var(--space-5) var(--space-3);
   color: inherit;
   text-decoration: none;
@@ -357,6 +468,7 @@ a.rb-joblist__row:hover {
   transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
+.rb-directory__row:last-child { border-bottom: 0; }
 .rb-directory__row:hover { background: var(--color-surface-hover); }
 
 .rb-directory__person {
@@ -368,9 +480,10 @@ a.rb-joblist__row:hover {
 
 .rb-directory__person strong { font-weight: var(--text-body-strong-weight); }
 .rb-directory__person small { overflow: hidden; color: var(--color-ink-secondary); font-size: var(--text-caption-size); text-overflow: ellipsis; white-space: nowrap; }
-.rb-directory__role { color: var(--color-ink-secondary); }
+.rb-directory__role { min-width: 0; color: var(--color-ink-secondary); }
+.rb-directory__score { text-align: right; }
 .rb-directory__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.rb-directory__action { color: var(--color-accent); font-size: var(--text-body-strong-size); font-weight: var(--text-body-strong-weight); white-space: nowrap; }
+.rb-directory__action { color: var(--color-accent); font-size: var(--text-body-strong-size); font-weight: var(--text-body-strong-weight); text-align: right; white-space: nowrap; }
 
 .rb-settings {
   display: grid;
@@ -391,6 +504,7 @@ a.rb-joblist__row:hover {
 @media (max-width: 767px) {
   .rb-directory__toolbar { align-items: stretch; flex-direction: column; gap: var(--space-2); }
   .rb-directory__toolbar .rb-field { width: 100%; }
+  .rb-directory__head { display: none; }
   .rb-directory__row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
   .rb-directory__role, .rb-directory__score { grid-column: 1; }
   .rb-directory__chips { grid-column: 1; }
@@ -497,6 +611,59 @@ a.rb-joblist__row:hover {
 /* --- Candidate Detail ----------------------------------------------------
  * screens.md section 4. Split 5:7, scores left, evidence right.
  */
+
+.rb-candidate__snapshot {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.75fr) minmax(220px, 1fr);
+  overflow: hidden;
+  margin-bottom: var(--space-8);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.rb-candidate__snapshot-role,
+.rb-candidate__snapshot-score,
+.rb-candidate__snapshot-state {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+}
+
+.rb-candidate__snapshot-role { background: var(--color-surface-sunken); }
+.rb-candidate__snapshot-score { background: var(--color-accent-tint); }
+.rb-candidate__snapshot-state { gap: var(--space-5); }
+
+.rb-candidate__snapshot-role p,
+.rb-candidate__snapshot-role strong,
+.rb-candidate__snapshot-role span,
+.rb-candidate__snapshot-state p,
+.rb-candidate__snapshot-state > div > span { margin: 0; }
+
+.rb-candidate__snapshot-role strong { font-size: var(--text-title-3-size); letter-spacing: var(--text-title-3-letter-spacing); }
+.rb-candidate__snapshot-role span,
+.rb-candidate__snapshot-state > div > span { color: var(--color-ink-secondary); font-size: var(--text-caption-size); }
+.rb-candidate__snapshot-state > div { display: flex; flex-direction: column; gap: var(--space-2); }
+.rb-candidate__snapshot-score .rb-score-hero__eyebrow { margin-bottom: var(--space-1); }
+.rb-candidate__snapshot-score .rb-score-hero__value { font-size: var(--text-score-large-size); }
+.rb-candidate__snapshot-score > strong { font-size: var(--text-score-large-size); color: var(--color-ink); }
+.rb-candidate__snapshot-score > span { color: var(--color-ink-secondary); font-size: var(--text-caption-size); }
+
+.rb-candidate__evidence-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rb-candidate__evidence-head p,
+.rb-candidate__evidence-head h2,
+.rb-candidate__evidence-head > span { margin: 0; }
+.rb-candidate__evidence-head h2 { margin-top: var(--space-1); }
 
 .rb-candidate__actions {
   display: flex;
@@ -662,9 +829,11 @@ a.rb-joblist__row:hover {
   grid-template-columns: minmax(240px, 1fr) minmax(240px, 5fr);
   align-items: end;
   gap: var(--space-10);
-  padding: var(--space-6) 0;
-  border-top: 1px solid var(--color-hairline);
-  border-bottom: 1px solid var(--color-hairline);
+  padding: var(--space-6);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-tint);
+  box-shadow: var(--shadow-sm);
 }
 
 .rb-result__score-context {
@@ -698,8 +867,7 @@ a.rb-joblist__row:hover {
 .rb-subscores {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-6);
-  padding: var(--space-2) 0;
+  gap: var(--space-3);
 }
 
 .rb-subscore__label {
@@ -719,6 +887,13 @@ a.rb-joblist__row:hover {
   color: var(--color-ink);
 }
 
+.rb-subscore {
+  padding: var(--space-5);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
 .rb-subscore__unit {
   margin: var(--space-1) 0 0;
   font-size: var(--text-caption-size);
@@ -729,6 +904,15 @@ a.rb-joblist__row:hover {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-6);
+}
+
+.rb-result__lists .rb-card { min-height: 100%; box-shadow: var(--shadow-sm); }
+
+.rb-transcript-section {
+  padding: var(--space-6);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 /* Plain bulleted lists. Concerns are not red (section 5). */
@@ -835,6 +1019,12 @@ a.rb-joblist__row:hover {
 }
 
 @media (max-width: 767px) {
+  .rb-candidate__snapshot { grid-template-columns: 1fr; }
+  .rb-candidate__snapshot-role,
+  .rb-candidate__snapshot-score,
+  .rb-candidate__snapshot-state { padding: var(--space-5); }
+  .rb-candidate__snapshot-state { border-top: 1px solid var(--color-hairline); }
+  .rb-candidate__evidence-head { align-items: flex-start; flex-direction: column; gap: var(--space-2); }
   .rb-candidate__actions {
     width: 100%;
   }
@@ -1244,4 +1434,40 @@ a.rb-joblist__row:hover {
   background: var(--color-surface-sunken);
   color: var(--color-ink-secondary);
   font-size: var(--text-caption-size);
+}
+
+/* --- Screening components -------------------------------------------------
+ * The resume and voice scores behind the weighted total. Two plain figures
+ * rather than a chart: the point is that the headline number has parts,
+ * not that they can be compared visually.
+ */
+
+.rb-candidate__components {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.rb-candidate__component p { margin: 0 0 var(--space-1); }
+
+.rb-candidate__component strong {
+  color: var(--color-ink);
+  font-size: var(--text-title-3-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-candidate__component strong span {
+  color: var(--color-ink-tertiary);
+  font-size: var(--text-caption-size);
+  font-weight: 400;
+}
+
+.rb-candidate__breakdown-label {
+  margin: 0 0 var(--space-3);
+  color: var(--color-ink-secondary);
 }

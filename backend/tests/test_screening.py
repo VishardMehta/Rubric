@@ -11,7 +11,7 @@ import pytest
 
 from app.integrations.llm import ValidationViolation
 from app.models import Evidence, Screening, SubScore
-from app.services.scoring import band_for, weighted_overall
+from app.services.scoring import band_for, weighted_overall, weighted_screening
 from app.services.validation import validate_screening
 from tests.fixtures.rubrics import valid_rubric
 
@@ -30,13 +30,21 @@ RESUME = (
 
 
 def _screening(**overrides) -> Screening:
-    """A valid screening for the fixture rubric, 100 points available."""
+    """A valid two-component screening for the fixture rubric.
+
+    Each component is a full scoring of the same 100-point rubric from one
+    source, so every quote in `sub_scores` comes from RESUME and every
+    quote in `voice_sub_scores` comes from TRANSCRIPT.
+    """
     base: dict = {
+        # Resume component: 15 + 18 + 0 + 0 + 12 = 45
         "sub_scores": [
             SubScore(
                 criterion_id="python_and_django",
-                evidence=[Evidence(source="introduction", quote="mostly Python")],
-                points_awarded=20,
+                evidence=[
+                    Evidence(source="resume", quote="Python, Django, PostgreSQL, pytest")
+                ],
+                points_awarded=15,
                 points_possible=25,
             ),
             SubScore(
@@ -48,6 +56,47 @@ def _screening(**overrides) -> Screening:
                     )
                 ],
                 points_awarded=18,
+                points_possible=20,
+            ),
+            # The resume says nothing about these two, so they score 0 with
+            # no evidence rather than borrowing from the transcript.
+            SubScore(
+                criterion_id="system_design",
+                evidence=[],
+                points_awarded=0,
+                points_possible=20,
+            ),
+            SubScore(
+                criterion_id="technical_communication",
+                evidence=[],
+                points_awarded=0,
+                points_possible=20,
+            ),
+            SubScore(
+                criterion_id="relevant_experience",
+                evidence=[
+                    Evidence(
+                        source="resume",
+                        quote="Backend Engineer, Zoho, 2023 to present",
+                    )
+                ],
+                points_awarded=12,
+                points_possible=15,
+            ),
+        ],
+        "total_score": 45,
+        # Voice component: 20 + 0 + 5 + 15 + 12 = 52
+        "voice_sub_scores": [
+            SubScore(
+                criterion_id="python_and_django",
+                evidence=[Evidence(source="introduction", quote="mostly Python")],
+                points_awarded=20,
+                points_possible=25,
+            ),
+            SubScore(
+                criterion_id="sql_and_data_modelling",
+                evidence=[],
+                points_awarded=0,
                 points_possible=20,
             ),
             SubScore(
@@ -84,11 +133,11 @@ def _screening(**overrides) -> Screening:
                 points_possible=15,
             ),
         ],
-        "total_score": 70,
+        "voice_total_score": 52,
         "matched_skills": ["Python", "PostgreSQL"],
         "unevidenced_skills": ["Kubernetes"],
         "resume_intro_conflicts": [],
-        "assessment": "Strong Python and SQL evidence. System design was thin.",
+        "assessment": "Strong SQL evidence on the resume. System design was thin in both.",
         "recommendation": "shortlist",
     }
     base.update(overrides)
@@ -104,10 +153,50 @@ def test_valid_screening_passes():
 
 
 def test_subscores_sum():
-    s = _screening(total_score=71)
+    s = _screening(total_score=46)
     with pytest.raises(ValidationViolation) as exc:
         _validate(s)
-    assert "70" in exc.value.message and "71" in exc.value.message
+    assert "45" in exc.value.message and "46" in exc.value.message
+
+
+def test_voice_subscores_sum():
+    """The voice component is held to the same arithmetic as the resume
+    component, not treated as a softer number beside it."""
+    s = _screening(voice_total_score=60)
+    with pytest.raises(ValidationViolation) as exc:
+        _validate(s)
+    assert "52" in exc.value.message and "60" in exc.value.message
+
+
+def test_each_component_may_only_quote_its_own_source():
+    """A resume component quoting the transcript is the two components
+    collapsing back into one, which is what the split exists to prevent."""
+    s = _screening()
+    s.sub_scores[0].evidence = [
+        Evidence(source="introduction", quote="mostly Python")
+    ]
+    with pytest.raises(ValidationViolation) as exc:
+        _validate(s)
+    assert "resume" in exc.value.message
+
+    s = _screening()
+    s.voice_sub_scores[0].evidence = [
+        Evidence(source="resume", quote="Python, Django, PostgreSQL, pytest")
+    ]
+    with pytest.raises(ValidationViolation) as exc:
+        _validate(s)
+    assert "introduction" in exc.value.message
+
+
+def test_final_score_weights_the_two_components():
+    """60/40, computed in one place. 45 and 52 give 48."""
+    s = _screening()
+    assert weighted_screening(s.total_score, s.voice_total_score) == 48
+    # A candidate strong on paper and unable to describe any of it does
+    # not screen the same as one who is strong at both.
+    assert weighted_screening(100, 0) == 60
+    assert weighted_screening(0, 100) == 40
+    assert weighted_screening(100, 100) == 100
 
 
 def test_criteria_ids_exist():
@@ -134,12 +223,12 @@ def test_duplicate_criterion_rejected():
     s.sub_scores.append(
         SubScore(
             criterion_id="python_and_django",
-            evidence=[Evidence(source="introduction", quote="mostly Python")],
+            evidence=[Evidence(source="resume", quote="Python, Django")],
             points_awarded=5,
             points_possible=25,
         )
     )
-    s.total_score = 75
+    s.total_score = 50
     with pytest.raises(ValidationViolation) as exc:
         _validate(s)
     assert "more than once" in exc.value.message
@@ -161,7 +250,7 @@ def test_evidence_source_matches():
 
 def test_fabricated_quote_rejected():
     s = _screening()
-    s.sub_scores[0].evidence = [
+    s.voice_sub_scores[0].evidence = [
         Evidence(source="introduction", quote="I led a team of fifty engineers")
     ]
     with pytest.raises(ValidationViolation) as exc:
@@ -173,7 +262,7 @@ def test_quote_matching_ignores_whitespace_and_case():
     """PDF extraction and transcription both introduce line breaks a model
     will not reproduce byte for byte. Everything else must still match."""
     s = _screening()
-    s.sub_scores[0].evidence = [
+    s.voice_sub_scores[0].evidence = [
         Evidence(source="introduction", quote="Mostly    Python")
     ]
     _validate(s)
@@ -183,7 +272,7 @@ def test_elided_quote_accepted_when_every_fragment_is_real():
     """Models habitually stitch passages with an ellipsis. Each fragment
     still has to be verbatim, so grounding holds."""
     s = _screening()
-    s.sub_scores[0].evidence = [
+    s.voice_sub_scores[0].evidence = [
         Evidence(
             source="introduction",
             quote="I have been a backend engineer ... handled the cold start problem",
@@ -194,7 +283,7 @@ def test_elided_quote_accepted_when_every_fragment_is_real():
 
 def test_elided_quote_rejected_when_a_fragment_is_invented():
     s = _screening()
-    s.sub_scores[0].evidence = [
+    s.voice_sub_scores[0].evidence = [
         Evidence(
             source="introduction",
             quote="I have been a backend engineer ... and won a Nobel prize",
@@ -234,9 +323,10 @@ def test_zero_points_may_have_no_evidence():
     """Scoring 0 because the sources said nothing is legitimate and must
     not be forced to invent a quote."""
     s = _screening()
+    # Resume component was 45 with 15 on this criterion.
     s.sub_scores[0].evidence = []
     s.sub_scores[0].points_awarded = 0
-    s.total_score = 50
+    s.total_score = 30
     _validate(s)
 
 

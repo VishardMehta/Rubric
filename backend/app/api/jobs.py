@@ -36,6 +36,7 @@ from app.models import (
     PublicJobSummary,
     Rubric,
 )
+from app.services.accounts import normalise_email
 from app.services.prompts import job_facts_prompts, rubric_prompts
 from app.services.validation import validate_job_facts, validate_rubric
 
@@ -111,10 +112,30 @@ def _to_detail(row: dict, counts: dict[str, int] | None = None) -> JobDetail:
 _FACT_COLUMNS = ("department", "location", "workplace_type", "employment_type", "compensation")
 
 
-def _to_public(row: dict) -> PublicJobSummary:
+def _applied_job_ids(email: str | None) -> set[str]:
+    """Jobs this address has already applied to.
+
+    One query, and the same relationship the database enforces: applying
+    twice violates the unique constraint on (job_id, email) and comes back
+    as `already_applied`. Reading it here means the portal can only ever
+    offer roles that applying would actually accept.
+
+    Deliberately not routed through the DEMO_AUTH fallback used by the
+    applications list. That fallback widens an empty answer to every
+    application on file, which here would hide every open role from a
+    candidate who has applied to none.
+    """
+    if not email or not email.strip():
+        return set()
+    rows = storage.list_candidates_by_email(normalise_email(email))
+    return {row["job_id"] for row in rows}
+
+
+def _to_public(row: dict, applied: bool = False) -> PublicJobSummary:
     """The candidate-facing view of a job. Never carries the rubric, which
     would tell an applicant exactly what to say."""
     return PublicJobSummary(
+        applied=applied,
         id=row["id"],
         title=row["title"],
         state=row["state"],
@@ -265,17 +286,34 @@ async def regenerate_rubric(job_id: str, hr: HRUser = Depends(require_hr)) -> Jo
 
 
 @router.get("/apply/{job_id}", response_model=PublicJobSummary)
-async def public_job_summary(job_id: str) -> PublicJobSummary:
-    """Public role detail. The rubric remains private to the hiring team."""
+async def public_job_summary(job_id: str, email: str | None = None) -> PublicJobSummary:
+    """Public role detail. The rubric remains private to the hiring team.
+
+    `email` is optional so a shared role link still opens for a stranger.
+    Supplied, it tells the page whether this person has already applied, so
+    it can offer their application instead of a second one.
+    """
     row = storage.get_job(job_id)
     if row is None:
         raise JobNotActive("That job could not be found.")
     if row["state"] != "active":
         raise JobNotActive()
-    return _to_public(row)
+    return _to_public(row, applied=job_id in _applied_job_ids(email))
 
 
 @router.get("/apply", response_model=list[PublicJobSummary])
-async def list_public_jobs() -> list[PublicJobSummary]:
-    """Roles a candidate may browse and apply to without an invitation URL."""
-    return [_to_public(row) for row in storage.list_jobs() if row["state"] == "active"]
+async def list_public_jobs(email: str | None = None) -> list[PublicJobSummary]:
+    """Roles a candidate may browse and apply to without an invitation URL.
+
+    Every active role is returned, each flagged with whether this address
+    has already applied. The filtering is left to the caller on purpose:
+    "roles you have applied to" and "roles still open to you" are two views
+    of one list, and returning the whole list keeps them consistent with
+    each other without a second request.
+    """
+    applied = _applied_job_ids(email)
+    return [
+        _to_public(row, applied=row["id"] in applied)
+        for row in storage.list_jobs()
+        if row["state"] == "active"
+    ]

@@ -110,6 +110,8 @@ export function CandidateDetailPage() {
         </div>
       )}
 
+      <CandidateSnapshot candidate={candidate} screening={screening} />
+
       {/* Post-approval: the interview link replaces the action bar. */}
       {candidate.interview_token && (
         <div className="rb-candidate__link">
@@ -141,22 +143,51 @@ export function CandidateDetailPage() {
               </Card>
             ) : (
               <Card primary>
-                <ScoreHero
-                  label="Screening score"
-                  score={candidate.screening_score as number}
-                  band={candidate.screening_band}
-                  bandLabel={recommendationLabel(candidate.recommendation)}
-                />
+                <div className="rb-candidate__evidence-head">
+                  <div>
+                    <p className="text-label">Screening evidence</p>
+                    <h2 className="text-title-3">How the score was earned</h2>
+                  </div>
+                  <span className="text-caption">Open a criterion for quotes</span>
+                </div>
+                {/* The two components behind the headline number. A
+                    weighted total is not explainable without them: 72
+                    from a strong resume and a thin introduction is a
+                    different candidate from 72 the other way round. */}
+                {candidate.resume_score !== null && candidate.voice_score !== null && (
+                  <div className="rb-candidate__components">
+                    <div className="rb-candidate__component">
+                      <p className="text-label">Resume · 60%</p>
+                      <strong>{candidate.resume_score}<span>/100</span></strong>
+                    </div>
+                    <div className="rb-candidate__component">
+                      <p className="text-label">Voice introduction · 40%</p>
+                      <strong>{candidate.voice_score}<span>/100</span></strong>
+                    </div>
+                  </div>
+                )}
                 <div className="rb-candidate__breakdown">
+                  <p className="text-label rb-candidate__breakdown-label">
+                    Resume, against the rubric
+                  </p>
                   <ScoreBreakdown
                     subScores={candidate.sub_scores}
-                    total={candidate.screening_score as number}
+                    total={candidate.resume_score ?? (candidate.screening_score as number)}
                     showEvidence
                   />
                 </div>
-                <p className="rb-candidate__hint">
-                  Open a criterion to see the quotes that earned its points.
-                </p>
+                {candidate.voice_sub_scores.length > 0 && (
+                  <div className="rb-candidate__breakdown">
+                    <p className="text-label rb-candidate__breakdown-label">
+                      Voice introduction, against the same rubric
+                    </p>
+                    <ScoreBreakdown
+                      subScores={candidate.voice_sub_scores}
+                      total={candidate.voice_score as number}
+                      showEvidence
+                    />
+                  </div>
+                )}
               </Card>
             )}
           </div>
@@ -251,6 +282,56 @@ export function CandidateDetailPage() {
         They will not receive an interview link. This cannot be undone in the MVP.
       </Modal>
     </>
+  );
+}
+
+function CandidateSnapshot({
+  candidate,
+  screening,
+}: {
+  candidate: CandidateDetail;
+  screening: boolean;
+}) {
+  const interview = candidate.interview_status === "evaluated" || candidate.interview_status === "complete"
+    ? "Interview complete"
+    : candidate.interview_status && candidate.interview_status !== "not_started"
+      ? "Interview in progress"
+      : "Interview not started";
+
+  return (
+    <section className="rb-candidate__snapshot" aria-label="Candidate overview">
+      <div className="rb-candidate__snapshot-role">
+        <p className="text-label">Candidate dossier</p>
+        <strong>{candidate.job_title}</strong>
+        <span>Applied {formatDayMonth(candidate.created_at)}</span>
+      </div>
+      <div className="rb-candidate__snapshot-score">
+        {screening ? (
+          <ScoreHero
+            label="Screening score"
+            score={candidate.screening_score as number}
+            band={candidate.screening_band}
+            bandLabel={recommendationLabel(candidate.recommendation)}
+          />
+        ) : (
+          <>
+            <p className="text-label">Screening score</p>
+            <strong>—</strong>
+            <span>Evaluation in progress</span>
+          </>
+        )}
+      </div>
+      <div className="rb-candidate__snapshot-state">
+        <div>
+          <p className="text-label">Screening status</p>
+          <StatusChip state={candidate.state} />
+        </div>
+        <div>
+          <p className="text-label">Interview</p>
+          <span>{interview}</span>
+        </div>
+      </div>
+    </section>
   );
 }
 

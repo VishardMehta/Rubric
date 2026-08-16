@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { HRShell } from "./components/layout";
 import { RequireHR } from "./components/layout/RequireHR";
+import { RequireCandidate } from "./components/layout/RequireCandidate";
+import type { CandidateSession } from "./lib/candidate-session";
 import { ErrorState, ToastProvider } from "./components/feedback";
 import { LandingPage } from "./routes/Landing";
 import { SignInPage } from "./routes/hr/SignIn";
@@ -13,6 +15,7 @@ import { CandidateDetailPage } from "./routes/hr/CandidateDetail";
 import { InterviewResultPage } from "./routes/hr/InterviewResult";
 import { HiringDirectoryPage, SettingsPage } from "./routes/hr/HiringDirectory";
 import { ApplicationPage } from "./routes/candidate/Application";
+import { CandidateSignInPage } from "./routes/candidate/CandidateSignIn";
 import { CandidatePortalPage } from "./routes/candidate/CandidatePortal";
 import { OpportunityDetailPage } from "./routes/candidate/OpportunityDetail";
 import { ApplicationCompletePage } from "./routes/candidate/ApplicationComplete";
@@ -35,6 +38,18 @@ import { InterviewCompletePage } from "./routes/candidate/InterviewComplete";
  */
 function hr(page: ReactNode) {
   return <RequireHR>{(account) => <HRShell account={account}>{page}</HRShell>}</RequireHR>;
+}
+
+/*
+ * The candidate's own pages, which need to know whose they are.
+ *
+ * Only the two screens that are about this person: the portal, and the
+ * form that submits under their address. Browsing a role and answering an
+ * interview stay open, because both are reached from a link someone was
+ * sent rather than from inside the product.
+ */
+function candidate(page: (session: CandidateSession) => ReactNode) {
+  return <RequireCandidate>{page}</RequireCandidate>;
 }
 
 function App() {
@@ -79,11 +94,20 @@ function App() {
             element={hr(<InterviewResultPage />)}
           />
 
-          {/* Candidate application. Unauthenticated, identified only by a
-              job id (product.md section 5). */}
-          <Route path="/apply" element={<CandidatePortalPage />} />
+          {/* Candidate sign in. Accepts any email with any password and
+              keeps no server session: it identifies, it does not
+              authenticate. See lib/candidate-session.ts. */}
+          <Route path="/candidate/signin" element={<CandidateSignInPage />} />
+
+          {/* Candidate application. The portal and the form know who is
+              looking; the role page does not, because a role link is meant
+              to be shareable (product.md section 5). */}
+          <Route path="/apply" element={candidate((session) => <CandidatePortalPage session={session} />)} />
           <Route path="/opportunities/:jobId" element={<OpportunityDetailPage />} />
-          <Route path="/apply/:jobId" element={<ApplicationPage />} />
+          <Route
+            path="/apply/:jobId"
+            element={candidate((session) => <ApplicationPage session={session} />)}
+          />
           <Route path="/apply/:jobId/done" element={<ApplicationCompletePage />} />
 
           {/* Candidate interview. Unauthenticated, identified only by an
