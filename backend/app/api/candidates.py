@@ -12,7 +12,13 @@ from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 
 from app.core.auth import HRUser, require_hr
-from app.core.errors import CandidateNotFound, JobNotActive, ScreeningFailed
+from app.core.errors import (
+    CandidateAlreadyDecided,
+    CandidateNotFound,
+    JobNotActive,
+    SchemaOutOfDate,
+    ScreeningFailed,
+)
 from app.integrations import storage
 from app.models import (
     ApprovalResult,
@@ -268,11 +274,57 @@ async def approve_candidate(
     )
 
 
+@router.post("/candidates/{candidate_id}/hire", response_model=CandidateSummary)
+async def hire_candidate(
+    candidate_id: str, hr: HRUser = Depends(require_hr)
+) -> CandidateSummary:
+    """Record the hire. The end of the pipeline, and the only good one.
+
+    Until this existed the pipeline had one terminal state and it was
+    'rejected': a finished search and one still waiting on a decision looked
+    the same on the board. Requires database/004_hired_state.sql.
+
+    Idempotent, so a second click is not an error. Rejected is the one state
+    it refuses, because the two decisions contradict each other and there is
+    no un-reject to go through first.
+    """
+    row, job = owned_candidate_or_404(candidate_id, hr)
+
+    if row["state"] == "rejected":
+        raise CandidateAlreadyDecided(
+            "This candidate was rejected. Reopening a rejected application is "
+            "not something Rubric supports."
+        )
+    if row["state"] == "hired":
+        return _summary(row, len((job or {}).get("skills") or []))
+
+    try:
+        updated = storage.set_candidate_state(candidate_id, "hired")
+    except Exception as exc:
+        # The state is new, so this is the one route that can outrun the
+        # database it is talking to. Says which file to run rather than
+        # surfacing a constraint name from a stack trace.
+        if storage.is_check_violation(exc, "candidates_state_check"):
+            raise SchemaOutOfDate(
+                "This database does not allow the 'hired' state yet. Run "
+                "database/004_hired_state.sql in the Supabase SQL editor."
+            ) from exc
+        raise
+
+    return _summary(updated, len((job or {}).get("skills") or []))
+
+
 @router.post("/candidates/{candidate_id}/reject", response_model=CandidateSummary)
 async def reject_candidate(
     candidate_id: str, hr: HRUser = Depends(require_hr)
 ) -> CandidateSummary:
-    _row, job = owned_candidate_or_404(candidate_id, hr)
+    row, job = owned_candidate_or_404(candidate_id, hr)
+
+    if row["state"] == "hired":
+        raise CandidateAlreadyDecided(
+            "This candidate has already been hired."
+        )
+
     updated = storage.set_candidate_state(candidate_id, "rejected")
     return _summary(updated, len((job or {}).get("skills") or []))
 

@@ -167,6 +167,43 @@ class PlannedQuestion(BaseModel):
     )
 
 
+# A rubric dimension, for a stored slot that predates `kind`, mapped to the
+# kind of question that dimension is actually probed with. Two of the three
+# are the same word. A communication criterion is probed by asking someone
+# to walk through something they did, which is the 'experience' shape.
+_LEGACY_KIND_BY_DIMENSION = {
+    "technical": "technical",
+    "experience": "experience",
+    "communication": "experience",
+}
+
+
+def _legacy_kind(row: dict, dimensions: dict[str, str]) -> str:
+    """The kind of a stored slot that was written before kinds existed.
+
+    Inferred only from what the row already says. Never 'followup': see
+    InterviewPlan.from_stored.
+    """
+    # The version that wrote these rows fixed the first two slots: introduce
+    # yourself, then a project from your resume. Both are stated in the plan
+    # prompt of that version, so this is reading the row's history, not
+    # guessing at it.
+    if row.get("slot") == 1:
+        return "experience"
+    if row.get("slot") == 2:
+        return "resume"
+
+    for criterion_id in row.get("criterion_ids") or []:
+        dimension = dimensions.get(criterion_id)
+        if dimension in _LEGACY_KIND_BY_DIMENSION:
+            return _LEGACY_KIND_BY_DIMENSION[dimension]
+
+    # The criteria no longer resolve, so there is nothing left in the row to
+    # read. 'technical' is the neutral answer: it makes no promise about the
+    # previous answer and none about their resume.
+    return "technical"
+
+
 class InterviewPlan(BaseModel):
     questions: list[PlannedQuestion] = Field(
         description=(
@@ -180,6 +217,42 @@ class InterviewPlan(BaseModel):
             "than running in a block."
         )
     )
+
+    @classmethod
+    def from_stored(cls, raw: dict, rubric: Rubric | None = None) -> InterviewPlan:
+        """Load a plan out of the database, whatever version of this model
+        wrote it.
+
+        `kind` was added to PlannedQuestion after plans had already been
+        stored, and after interviews were already running against them.
+        Those rows carry every other field and no kind at all, so a plain
+        model_validate rejects them and the candidate's next answer fails
+        mid-interview, on a plan that is otherwise complete and correct.
+
+        Making `kind` optional was the alternative and it is worse: it is a
+        required decision for every plan generated from here on, the plan
+        prompt describes it as one, and the mix rules in validation.py count
+        it. Optional would make a missing kind legal in new output too. So
+        the field stays required and the old shape is upgraded here, at the
+        single place a stored plan is read.
+
+        **Never 'followup'.** A follow-up slot carries a contract with the
+        turn validator: the next question has to be anchored on a claim from
+        the answer just given. The planner that wrote these rows never made
+        that promise, and there is nothing in the row to honour it with, so
+        labelling a legacy slot 'followup' would fail a turn for an
+        interview that is running right now.
+        """
+        questions = list((raw or {}).get("questions") or [])
+        if all(isinstance(q, dict) and q.get("kind") for q in questions):
+            return cls.model_validate(raw)
+
+        dimensions = {c.id: c.dimension for c in rubric.criteria} if rubric else {}
+        upgraded = [
+            ({**q, "kind": _legacy_kind(q, dimensions)} if isinstance(q, dict) and not q.get("kind") else q)
+            for q in questions
+        ]
+        return cls.model_validate({**raw, "questions": upgraded})
 
     def slot(self, number: int) -> PlannedQuestion | None:
         for question in self.questions:
@@ -505,7 +578,7 @@ class CandidateApplication(BaseModel):
     # is told their application is closed, not that it scored 42.
     status: Literal[
         "submitted", "in_review", "interview_ready", "interview_in_progress",
-        "interview_complete", "closed",
+        "interview_complete", "offer", "closed",
     ]
     status_label: str
     status_detail: str
@@ -615,9 +688,13 @@ class ResumeProfile(BaseModel):
     )
     links: list[str] = Field(
         description=(
-            "URLs the resume gives, for example a GitHub or portfolio. Copy "
-            "them exactly. Empty when the resume has none or gives only "
-            "unlinked labels."
+            "Web addresses the resume text actually contains, copied exactly: "
+            "something starting http:// or https://, or a bare domain such as "
+            "github.com/name or linkedin.com/in/name. A bare word like "
+            "'GitHub', 'Kaggle' or 'Portfolio' is the label of a hyperlink "
+            "whose address did not survive the PDF extraction, and it goes in "
+            "this list only if the address itself is there too. Return [] when "
+            "the text has no addresses in it."
         )
     )
 

@@ -185,7 +185,9 @@ def _advance(
     if interview["status"] != "in_progress":
         raise InvalidToken("This interview has not been started yet.")
 
-    plan = InterviewPlan.model_validate(interview["plan"])
+    # from_stored, not model_validate: plans written before `kind` existed
+    # are still in the table, two of them mid-interview.
+    plan = InterviewPlan.from_stored(interview["plan"], rubric)
     state = InterviewState(interview.get("state_object"))
     total = interview["total_questions"]
 

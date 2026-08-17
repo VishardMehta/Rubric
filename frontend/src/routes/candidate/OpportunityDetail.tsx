@@ -31,6 +31,10 @@ export function OpportunityDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Same reason as the HR screens: moving between two roles must not
+    // show the previous role under the new one's URL.
+    setJob(null);
+    setFailure(null);
     api.getPublicJob(jobId, email).then(
       (loaded) => !cancelled && setJob(loaded),
       (cause) => !cancelled && setFailure(cause),

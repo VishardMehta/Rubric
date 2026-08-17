@@ -423,3 +423,46 @@ def test_candidate_detail_omits_interview_fields_when_none_exists(client, monkey
 
     assert body["interview_token"] is None
     assert body["interview_status"] is None
+
+
+def test_a_500_still_carries_cors_so_it_is_not_read_as_a_dead_backend(client):
+    """The bug this catches cost real debugging time.
+
+    The catch-all Exception handler runs inside Starlette's
+    ServerErrorMiddleware, which is outside CORSMiddleware, so its response
+    never got Access-Control-Allow-Origin. The browser blocked a response
+    the backend had sent, fetch() threw, and the frontend reported "Rubric
+    could not reach the server" for a process that was up and answering.
+    """
+    app = client.app
+
+    @app.get("/api/_test_boom")
+    async def boom():  # pragma: no cover - raised on purpose
+        raise RuntimeError("simulated downstream failure")
+
+    from fastapi.testclient import TestClient
+
+    raw = TestClient(app, raise_server_exceptions=False)
+    allowed = raw.get("/api/_test_boom", headers={"Origin": "http://localhost:5273"})
+    assert allowed.status_code == 500
+    assert allowed.headers["access-control-allow-origin"] == "http://localhost:5273"
+    assert allowed.json()["error"]["code"] == "internal_error"
+
+    # And it must not become a way to widen CORS.
+    other = raw.get("/api/_test_boom", headers={"Origin": "http://evil.example.com"})
+    assert "access-control-allow-origin" not in other.headers
+
+
+def test_database_unavailable_is_distinct_from_backend_down(client, monkeypatch):
+    """A database failure must not report as an unreachable backend."""
+    from app.core.errors import DatabaseUnavailable
+
+    monkeypatch.setattr(
+        jobs_api.storage, "list_jobs", lambda owner_id=None: (_ for _ in ()).throw(DatabaseUnavailable())
+    )
+    response = client.get("/api/jobs")
+    assert response.status_code == 503
+    body = response.json()["error"]
+    assert body["code"] == "database_unavailable"
+    assert body["retryable"] is True
+    assert "database" in body["message"].lower()

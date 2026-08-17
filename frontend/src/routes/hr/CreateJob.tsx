@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader, Split } from "../../components/layout";
 import { Button, Chip, Select, TagInput, TextArea, TextField } from "../../components/primitives";
@@ -46,12 +46,30 @@ export function CreateJobPage() {
   const [employmentType, setEmploymentType] = useState("full_time");
   const [compensation, setCompensation] = useState("");
   const [sourceDocument, setSourceDocument] = useState<File | null>(null);
+  // Needed to clear the control: an <input type="file"> keeps its value
+  // after the state behind it is dropped, and a value that is still there
+  // means picking the same PDF again fires no change event at all.
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   // What the last PDF import actually filled in. Shown in the side panel
   // so the extraction is visible rather than silently rewriting the form
   // under the recruiter.
-  const [imported, setImported] = useState<{ filename: string; filled: string[] } | null>(null);
+  const [imported, setImported] = useState<
+    { filename: string; filled: string[]; kept: string[] } | null
+  >(null);
+  // What the last import wrote, field by field, as the exact string it
+  // wrote. This is what tells an extracted value apart from a typed one on
+  // a second upload: if a field still holds precisely what extraction put
+  // there, nobody has edited it and the new document may replace it. If it
+  // holds anything else, a recruiter typed it and it is theirs.
+  //
+  // Employment type starts in here because the form defaults it to
+  // full_time. That default is not something anyone chose, so without this
+  // the first upload would treat it as typed and never fill it in.
+  const [extracted, setExtracted] = useState<Record<string, string>>({
+    employment_type: "full_time",
+  });
 
   const [touched, setTouched] = useState({ title: false, description: false, skills: false });
 
@@ -106,54 +124,88 @@ export function CreateJobPage() {
     }
   }, [valid, title, description, skills, experience, department, location, workplaceType, employmentType, compensation]);
 
+  const clearDocument = useCallback(() => {
+    setSourceDocument(null);
+    setDocumentError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
+
   const importDocument = useCallback(async () => {
     if (!sourceDocument) return;
     setDocumentLoading(true);
     setDocumentError(null);
-    setImported(null);
+    // The previous import's summary stays up until this one succeeds. If
+    // this PDF cannot be read, the form still holds the last document's
+    // values, so a panel that had gone blank would be describing a state
+    // the form is not in.
     try {
-      const extracted = await api.extractJobDescription(sourceDocument);
-      const facts = extracted.facts;
+      const document = await api.extractJobDescription(sourceDocument);
+      const facts = document.facts;
+
+      // A second upload replaces what the first one extracted and leaves
+      // everything the recruiter typed alone. Ownership is decided by
+      // comparing the field against the value the last extraction recorded
+      // for it: still equal means untouched, anything else means edited.
+      const filled: string[] = [];
+      const kept: string[] = [];
+      const owned: Record<string, string> = {};
+
+      const fill = (
+        key: string,
+        label: string,
+        value: string | null | undefined,
+        current: string,
+        set: (next: string) => void,
+      ) => {
+        const mine = !current.trim() || current === extracted[key];
+        if (!mine) {
+          // Theirs. Not replaced, and not recorded as extracted either, so
+          // it stays theirs through every upload after this one.
+          if (value) kept.push(label);
+          return;
+        }
+        // Clearing is deliberate when this document does not state a field
+        // the last one did. Otherwise the form ends up as a mix of two
+        // documents with no way to tell which line came from which.
+        const next = value ?? "";
+        set(next);
+        if (next) {
+          owned[key] = next;
+          filled.push(label);
+        }
+      };
 
       // Without facts the endpoint behaves as it always did: the raw text
       // goes into the description and HR fills the rest in by hand.
-      setDescription(facts?.description?.trim() || extracted.text);
+      const body = facts?.description?.trim() || document.text;
+      fill("description", "Description", body, description, setDescription);
       setTouched((current) => ({ ...current, description: true }));
 
       if (facts) {
-        // Only ever fills a field that is still empty. Overwriting
-        // something HR typed would lose their work to a guess, and the
-        // parser is explicitly allowed to return null for anything the
-        // document does not state.
-        const filled: string[] = [];
-        const fill = (
-          label: string,
-          value: string | null | undefined,
-          current: string,
-          set: (next: string) => void,
-        ) => {
-          if (value && !current.trim()) {
-            set(value);
-            filled.push(label);
-          }
-        };
+        fill("title", "Job title", facts.title, title, setTitle);
+        fill("department", "Team or department", facts.department, department, setDepartment);
+        fill("location", "Location", facts.location, location, setLocation);
+        fill("workplace_type", "Workplace type", facts.workplace_type, workplaceType, setWorkplaceType);
+        fill("employment_type", "Employment type", facts.employment_type, employmentType, setEmploymentType);
+        fill("compensation", "Compensation", facts.compensation, compensation, setCompensation);
+        fill("experience", "Experience required", facts.experience, experience, setExperience);
 
-        fill("Job title", facts.title, title, setTitle);
-        fill("Team or department", facts.department, department, setDepartment);
-        fill("Location", facts.location, location, setLocation);
-        fill("Workplace type", facts.workplace_type, workplaceType, setWorkplaceType);
-        fill("Employment type", facts.employment_type, employmentType, setEmploymentType);
-        fill("Compensation", facts.compensation, compensation, setCompensation);
-        fill("Experience required", facts.experience, experience, setExperience);
-
-        if (facts.skills.length > 0 && skills.length === 0) {
+        // Same rule, joined for comparison because the field is a list.
+        const currentSkills = skills.join(", ");
+        const skillsMine = skills.length === 0 || currentSkills === extracted.skills;
+        if (skillsMine) {
           setSkills(facts.skills);
-          filled.push("Required skills");
+          if (facts.skills.length > 0) {
+            owned.skills = facts.skills.join(", ");
+            filled.push("Required skills");
+          }
+        } else if (facts.skills.length > 0) {
+          kept.push("Required skills");
         }
-        setImported({ filename: sourceDocument.name, filled });
-      } else {
-        setImported({ filename: sourceDocument.name, filled: [] });
       }
+
+      setExtracted(owned);
+      setImported({ filename: sourceDocument.name, filled, kept });
     } catch (cause) {
       setDocumentError(cause instanceof ApiError ? cause.message : "The PDF could not be read. Try another file.");
     } finally {
@@ -162,6 +214,7 @@ export function CreateJobPage() {
   }, [
     sourceDocument,
     title,
+    description,
     department,
     location,
     workplaceType,
@@ -169,6 +222,7 @@ export function CreateJobPage() {
     compensation,
     experience,
     skills,
+    extracted,
   ]);
 
   // --- Stage B, generating ------------------------------------------------
@@ -350,6 +404,7 @@ export function CreateJobPage() {
                   <label className="rb-createjob__file-control">
                     <span>{sourceDocument ? sourceDocument.name : "Choose PDF"}</span>
                     <input
+                      ref={fileInputRef}
                       type="file"
                       accept="application/pdf,.pdf"
                       onChange={(event) => {
@@ -358,6 +413,22 @@ export function CreateJobPage() {
                       }}
                     />
                   </label>
+                  {/* A sibling, not a child of the label. The file input is
+                      stretched across the whole control, so a clear button
+                      inside it would be under that overlay and would open
+                      the picker instead of clearing anything. */}
+                  {sourceDocument && (
+                    <button
+                      type="button"
+                      className="rb-createjob__file-clear"
+                      onClick={clearDocument}
+                      disabled={documentLoading}
+                      aria-label={`Remove ${sourceDocument.name}`}
+                      title="Remove this file"
+                    >
+                      <span aria-hidden="true">✕</span>
+                    </button>
+                  )}
                   <Button type="button" disabled={!sourceDocument || documentLoading} onClick={() => void importDocument()}>
                     {documentLoading ? "Extracting…" : "Use document text"}
                   </Button>
@@ -487,7 +558,7 @@ function RolePanel({
   workplaceType: string;
   employmentType: string;
   compensation: string;
-  imported: { filename: string; filled: string[] } | null;
+  imported: { filename: string; filled: string[]; kept: string[] } | null;
   heading: string;
 }) {
   const facts = [
@@ -518,6 +589,15 @@ function RolePanel({
             <p className="text-caption">
               The text was imported. Nothing else could be read from it with
               confidence, so the remaining fields are yours to fill.
+            </p>
+          )}
+          {/* Said out loud rather than left for HR to notice. A second
+              upload that quietly skipped a field would read as a failed
+              import. */}
+          {imported.kept.length > 0 && (
+            <p className="text-caption">
+              Kept your {imported.kept.join(", ")}. This document had values for
+              those, but you had already edited them.
             </p>
           )}
         </div>

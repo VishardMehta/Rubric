@@ -96,10 +96,39 @@ brew install ffmpeg          # macOS. apt install ffmpeg on Debian/Ubuntu
 
 ```bash
 cd backend && python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-cd ../frontend && npm install
+cd ../frontend && npm ci
 ```
 
 `[dev]` adds pytest and ruff. Drop it if you only want to run the app.
+
+<details>
+<summary>Where dependencies are declared, and why there is no <code>requirements.txt</code></summary>
+
+Backend dependencies live in `backend/pyproject.toml` under `[project]
+dependencies`, with the test and lint tools under
+`[project.optional-dependencies] dev`. That is the whole specification, and
+`pip install -e ".[dev]"` reads it. A `requirements.txt` alongside it would
+be a second list of the same packages that nothing keeps in step with the
+first, so there is not one.
+
+Frontend dependencies are in `frontend/package.json`, pinned exactly by
+`frontend/package-lock.json`. Use `npm ci` instead of `npm install` to
+install those exact versions and leave the lockfile untouched.
+
+`pyproject.toml` uses lower bounds rather than exact pins, so a fresh
+install resolves to current releases. Verified on a clean virtualenv,
+2026-08-17, all 219 backend tests passing:
+
+| | | | |
+|---|---|---|---|
+| fastapi 0.141.1 | pydantic 2.13.4 | supabase 2.31.0 | groq 1.6.0 |
+| uvicorn 0.52.3 | pydantic-settings 2.15.0 | google-genai 2.18.1 | faster-whisper 1.2.1 |
+| python-multipart 0.0.32 | python-dotenv 1.2.3 | pypdf 6.16.1 | pytest 9.1.1 / ruff 0.16.3 |
+
+If a future release of one of these breaks the build, pin that one package
+in `pyproject.toml` to the version above rather than adding a lockfile.
+
+</details>
 
 **2. Get the keys** — all three are free, no card required.
 
@@ -125,8 +154,9 @@ cp backend/.env.example backend/.env    # then fill it in
 | `database/schema.sql` | Five tables, row level security, three private storage buckets |
 | `database/002_accounts.sql` | HR accounts and sessions, job ownership, two atomicity functions |
 | `database/003_screening_components.sql` | The resume and voice score columns |
+| `database/004_hired_state.sql` | The terminal `hired` state |
 
-All three are additive and safe to re-run. You now have an empty database.
+All four are additive and safe to re-run. You now have an empty database.
 
 **4. Run**
 

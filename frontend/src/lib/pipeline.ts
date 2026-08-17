@@ -20,6 +20,7 @@ import type { CandidateSummary } from "../api/client";
  */
 
 export type PipelineGroupId =
+  | "hired"
   | "interviewed"
   | "in_progress"
   | "awaiting_interview"
@@ -46,6 +47,12 @@ const GROUP_ORDER: {
   hint: string;
   collapsed: boolean;
 }[] = [
+  {
+    id: "hired",
+    title: "Hired",
+    hint: "The search ended here.",
+    collapsed: false,
+  },
   {
     id: "interviewed",
     title: "Interviewed",
@@ -85,6 +92,11 @@ const GROUP_ORDER: {
  * while their interview is already `in_progress`.
  */
 export function groupFor(candidate: CandidateSummary): PipelineGroupId {
+  // Both terminal states are read before the interview status, which is
+  // otherwise the more specific fact. Once a decision is recorded it is the
+  // only thing about this row that matters, and someone who has been hired
+  // sitting under "Interviewed" makes the decision invisible on the board.
+  if (candidate.state === "hired") return "hired";
   if (candidate.state === "rejected") return "rejected";
 
   if (candidate.interview_status === "complete" || candidate.interview_status === "evaluated") {
@@ -116,7 +128,10 @@ export function buildPipeline<T extends CandidateSummary>(candidates: T[]): Pipe
     candidates: candidates
       .filter((candidate) => groupFor(candidate) === group.id)
       .sort((a, b) => {
-        const key = group.id === "interviewed" ? "interview_score" : "screening_score";
+        const key =
+          group.id === "interviewed" || group.id === "hired"
+            ? "interview_score"
+            : "screening_score";
         return (b[key] ?? -1) - (a[key] ?? -1);
       }),
   })).filter((group) => group.candidates.length > 0);

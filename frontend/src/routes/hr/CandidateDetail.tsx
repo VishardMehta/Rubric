@@ -27,6 +27,12 @@ export function CandidateDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Cleared first. Moving from one applicant to another would otherwise
+    // show the previous person's scores, transcript and resume under the
+    // new candidate's URL until the request resolved.
+    setCandidate(null);
+    setFailure(null);
+    setActionError(null);
     api
       .getCandidate(candidateId)
       .then((loaded) => !cancelled && setCandidate(loaded))
@@ -44,6 +50,19 @@ export function CandidateDetailPage() {
       // Re-fetch rather than patching state locally: approval mints the
       // interview token server-side, and the detail response is the only
       // thing that knows it.
+      setCandidate(await api.getCandidate(candidateId));
+    } catch (cause) {
+      setActionError(cause instanceof ApiError ? cause.message : "Something went wrong. Try again.");
+    } finally {
+      setActing(false);
+    }
+  }, [candidateId]);
+
+  const hire = useCallback(async () => {
+    setActing(true);
+    setActionError(null);
+    try {
+      await api.hireCandidate(candidateId);
       setCandidate(await api.getCandidate(candidateId));
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : "Something went wrong. Try again.");
@@ -79,8 +98,18 @@ export function CandidateDetailPage() {
   if (!candidate) return <LoadingState label="Loading candidate" block />;
 
   const screening = candidate.screening_score !== null;
+  // The screening decision: approve for interview, or reject. Once it is
+  // taken the header shows the stage instead of the buttons.
   const decided = candidate.state === "approved" || candidate.state === "interviewing" ||
-    candidate.state === "interviewed" || candidate.state === "rejected";
+    candidate.state === "interviewed" || candidate.state === "hired" ||
+    candidate.state === "rejected";
+
+  // The final decision, which is a different decision and comes later. It
+  // opens once the interview is over, because that is the last thing there
+  // is to read before making it, and closes once either terminal state is
+  // recorded. Rejecting here is the same reject as above: there is one
+  // rejected state, not a pre-interview and a post-interview one.
+  const finalCall = candidate.state === "interviewed";
 
   return (
     <>
@@ -89,7 +118,17 @@ export function CandidateDetailPage() {
         breadcrumb={{ label: candidate.job_title, to: `/jobs/${jobId}` }}
         subtitle={`${candidate.email} · Applied ${formatDayMonth(candidate.created_at)}`}
         actions={
-          decided ? (
+          finalCall ? (
+            <div className="rb-candidate__actions">
+              <StatusChip state={candidate.state} />
+              <Button level="destructive" onClick={() => setConfirmingReject(true)} disabled={acting}>
+                Reject
+              </Button>
+              <Button level="primary" onClick={() => void hire()} loading={acting}>
+                Hire
+              </Button>
+            </div>
+          ) : decided ? (
             <StatusChip state={candidate.state} />
           ) : (
             <div className="rb-candidate__actions">
@@ -279,7 +318,9 @@ export function CandidateDetailPage() {
           </>
         }
       >
-        They will not receive an interview link. This cannot be undone in the MVP.
+        {finalCall
+          ? "This closes their application. It cannot be undone in the MVP."
+          : "They will not receive an interview link. This cannot be undone in the MVP."}
       </Modal>
     </>
   );

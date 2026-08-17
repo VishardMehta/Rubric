@@ -16,6 +16,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.integrations import storage
 from app.integrations.demo_supabase import DemoClient
 from app.main import create_app
@@ -75,6 +76,29 @@ def applicant(store):
         recommendation="review",
     )
     return {"job": job, "candidate": candidate}
+
+
+def test_a_new_candidate_sees_nothing_even_with_demo_auth_on(api, applicant, monkeypatch):
+    """The isolation rule, and the regression this file exists to prevent.
+
+    There used to be a DEMO_AUTH fallback that showed every application on
+    file when the address had none, so a brand new candidate saw sixteen
+    applications belonging to other people. An empty list is the only
+    correct answer for someone who has not applied to anything, whatever
+    the demo flags say.
+    """
+    monkeypatch.setenv("DEMO_AUTH", "1")
+    get_settings.cache_clear()
+    try:
+        mine = api.get("/api/applications?email=applicant@example.com")
+        assert mine.status_code == 200
+        assert len(mine.json()) == 1, "the address that applied still sees its own"
+
+        nobody = api.get("/api/applications?email=nobody@example.com")
+        assert nobody.status_code == 200
+        assert nobody.json() == []
+    finally:
+        get_settings.cache_clear()
 
 
 def _walk(node):

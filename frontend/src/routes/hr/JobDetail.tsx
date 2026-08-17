@@ -41,6 +41,13 @@ export function JobDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Cleared before the fetch, not after it resolves. Without this,
+    // moving from one role to another leaves the previous role's title and
+    // its candidate list on screen under the new URL until the request
+    // comes back: one job's applicants shown as another's.
+    setJob(null);
+    setCandidates(null);
+    setFailure(null);
     Promise.all([api.getJob(jobId), api.listCandidates(jobId)])
       .then(([loadedJob, loadedCandidates]) => {
         if (cancelled) return;
@@ -151,7 +158,7 @@ export function JobDetailPage() {
 
 type RankedCandidate = CandidateSummary & { rank: number };
 
-function columns(jobId: string, showInterview: boolean): Column<RankedCandidate>[] {
+function columns(jobId: string): Column<RankedCandidate>[] {
   return [
     {
       key: "rank",
@@ -184,22 +191,18 @@ function columns(jobId: string, showInterview: boolean): Column<RankedCandidate>
       width: "96px",
       cell: (row) => <ScoreInline score={row.screening_score} band={row.screening_band} />,
     },
-    // Only where it exists. A column of em-spaces across every
-    // not-yet-interviewed group would be noise, and screens.md is explicit
-    // that an unscored candidate shows an em-space rather than a zero.
-    ...(showInterview
-      ? [
-          {
-            key: "interview",
-            header: "Interview",
-            align: "right" as const,
-            width: "96px",
-            cell: (row: RankedCandidate) => (
-              <ScoreInline score={row.interview_score} band={row.interview_band} />
-            ),
-          },
-        ]
-      : []),
+    // Shown in every group, including the ones where nobody has been
+    // interviewed yet. It used to appear only where a score existed, which
+    // meant the two numbers HR is comparing sat in different columns from
+    // group to group. An em-space says "not yet"; screens.md is explicit
+    // that an unscored candidate never shows a zero.
+    {
+      key: "interview",
+      header: "Interview",
+      align: "right",
+      width: "96px",
+      cell: (row) => <ScoreInline score={row.interview_score} band={row.interview_band} />,
+    },
     {
       key: "skills",
       header: "Skills",
@@ -239,7 +242,16 @@ function CandidateCard({
     <Link to={`/jobs/${jobId}/candidates/${candidate.id}`} className="rb-card-row">
       <span className="rb-card-row__top">
         <span className="rb-card-row__name">{candidate.name}</span>
-        <ScoreInline score={candidate.screening_score} band={candidate.screening_band} />
+        {/* Both numbers, labelled, because the compact layout has no
+            column headers to tell them apart. */}
+        <span className="rb-card-row__scores">
+          <span>
+            Screening <ScoreInline score={candidate.screening_score} band={candidate.screening_band} />
+          </span>
+          <span>
+            Interview <ScoreInline score={candidate.interview_score} band={candidate.interview_band} />
+          </span>
+        </span>
       </span>
       <span className="rb-card-row__secondary">{candidate.email}</span>
       <span className="rb-card-row__chips">
@@ -272,7 +284,7 @@ function PipelineSection({
   jobId: string;
   jobTitle: string;
 }) {
-  const showInterview = group.id === "interviewed" || group.id === "in_progress";
+  const interviewLed = group.id === "interviewed" || group.id === "hired";
 
   const table = (
     <DataTable
@@ -283,11 +295,14 @@ function PipelineSection({
         // Interviewed candidates go straight to the result, which is the
         // thing you opened the row to read. Everyone else goes to their
         // detail page.
-        group.id === "interviewed"
+        // The interview result only exists if there was one. A hired
+        // candidate normally has one, but the row still has to link
+        // somewhere real if HR hired them without interviewing.
+        interviewLed && row.interview_status
           ? `/jobs/${jobId}/candidates/${row.id}/interview`
           : `/jobs/${jobId}/candidates/${row.id}`
       }
-      columns={columns(jobId, showInterview)}
+      columns={columns(jobId)}
       renderCard={(row) => <CandidateCard jobId={jobId} candidate={row} />}
     />
   );

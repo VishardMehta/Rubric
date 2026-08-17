@@ -379,6 +379,23 @@
   gap: var(--space-3);
 }
 
+/* The two scores, side by side, each behind its own word. The compact
+   layout has no column headers to name them. */
+.rb-card-row__scores {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  font-size: var(--text-caption-size);
+  color: var(--color-ink-secondary);
+}
+
+.rb-card-row__scores > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
 .rb-card-row__name {
   font-size: var(--text-body-strong-size);
   font-weight: var(--text-body-strong-weight);

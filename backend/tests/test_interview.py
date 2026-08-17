@@ -8,6 +8,7 @@ Structural invariants only. Gemini is not called; the live run covers that.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from app.core.heuristics import (
     PLAN_FIXED_OPENING_SLOTS,
@@ -351,6 +352,73 @@ def test_non_resume_question_may_not_carry_an_anchor():
     with pytest.raises(ValidationViolation) as exc:
         validate_plan(plan, rubric, planned_question_count(rubric))
     assert "anchor" in exc.value.message
+
+
+# --- plan: loading what is already in the database -----------------------
+#
+# Plans written before `kind` existed are still in the table, and two of
+# them belong to interviews that are in progress. InterviewPlan.from_stored
+# is the one place that shape is upgraded.
+
+
+def _legacy_stored_plan(rubric: Rubric) -> dict:
+    """A plan in the exact shape the previous version persisted: seven
+    slots, no kind on any of them, no anchor field at all."""
+    criterion_ids = [c.id for c in rubric.criteria]
+    return {
+        "questions": [
+            {
+                "slot": slot,
+                "intent": f"Probe {criterion_ids[min(slot - 1, len(criterion_ids) - 1)]}",
+                "criterion_ids": [criterion_ids[min(slot - 1, len(criterion_ids) - 1)]],
+                "depth": "opening" if slot <= 2 else "probing",
+            }
+            for slot in range(1, 8)
+        ]
+    }
+
+
+def test_a_plan_stored_before_kinds_existed_still_loads():
+    """The regression this shim exists for: model_validate rejects these
+    rows, and the rejection lands on a candidate mid-interview."""
+    rubric = valid_rubric()
+    raw = _legacy_stored_plan(rubric)
+
+    with pytest.raises(ValidationError):
+        InterviewPlan.model_validate(raw)
+
+    plan = InterviewPlan.from_stored(raw, rubric)
+    assert len(plan.questions) == 7
+    assert all(q.kind for q in plan.questions)
+    # Everything else in the row survives untouched.
+    assert [q.slot for q in plan.questions] == list(range(1, 8))
+    assert plan.slot(3).intent == raw["questions"][2]["intent"]
+
+
+def test_a_legacy_slot_is_never_read_as_a_followup():
+    """A follow-up promises the turn validator that the next question is
+    anchored on a claim from the answer just given. These rows were written
+    by a planner that never made that promise, so calling one a follow-up
+    would fail a turn for an interview running right now."""
+    rubric = valid_rubric()
+    plan = InterviewPlan.from_stored(_legacy_stored_plan(rubric), rubric)
+    assert not any(q.kind == "followup" for q in plan.questions)
+
+
+def test_a_legacy_plan_loads_without_a_rubric_to_read():
+    """The dimensions are the better source, but their absence must not be
+    the thing that breaks the interview."""
+    rubric = valid_rubric()
+    plan = InterviewPlan.from_stored(_legacy_stored_plan(rubric), None)
+    assert all(q.kind for q in plan.questions)
+    assert not any(q.kind == "followup" for q in plan.questions)
+
+
+def test_a_current_plan_loads_through_the_same_call_unchanged():
+    rubric = valid_rubric()
+    current = _plan(rubric)
+    loaded = InterviewPlan.from_stored(current.model_dump(), rubric)
+    assert loaded == current
 
 
 # --- rubric dimensions --------------------------------------------------

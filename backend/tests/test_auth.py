@@ -170,6 +170,7 @@ def test_every_hr_route_refuses_an_anonymous_caller(api):
         ("get", "/api/candidates/any"),
         ("post", "/api/candidates/any/approve"),
         ("post", "/api/candidates/any/reject"),
+        ("post", "/api/candidates/any/hire"),
         ("post", "/api/candidates/any/rescreen"),
         ("get", "/api/candidates/any/interview"),
         ("post", "/api/candidates/any/interview/evaluate"),
@@ -323,6 +324,7 @@ def test_another_account_cannot_reach_the_job_or_its_applicants(api, two_account
         ("get", f"/api/candidates/{candidate_id}"),
         ("post", f"/api/candidates/{candidate_id}/approve"),
         ("post", f"/api/candidates/{candidate_id}/reject"),
+        ("post", f"/api/candidates/{candidate_id}/hire"),
         ("post", f"/api/candidates/{candidate_id}/rescreen"),
         ("get", f"/api/candidates/{candidate_id}/interview"),
         ("post", f"/api/candidates/{candidate_id}/interview/evaluate"),
@@ -406,6 +408,107 @@ def test_approving_does_not_reopen_a_finished_interview(api, two_accounts):
 
     again = api.post(f"/api/candidates/{candidate_id}/approve", headers=a)
     assert again.json()["state"] == "interviewed"
+
+
+# ---------------------------------------------------------------------
+# The final decision. Two terminal states, and neither one reverses the
+# other. database/004_hired_state.sql.
+# ---------------------------------------------------------------------
+
+
+def test_hiring_records_the_one_terminal_state_that_is_not_rejection(api, two_accounts):
+    """Before this the pipeline could only end badly: 'rejected' was the
+    only terminal state, so a finished search and one still waiting on a
+    decision looked the same."""
+    a = auth(two_accounts["a"]["token"])
+    candidate_id = two_accounts["candidate"]["id"]
+    storage.set_candidate_state(candidate_id, "interviewed")
+
+    hired = api.post(f"/api/candidates/{candidate_id}/hire", headers=a)
+    assert hired.status_code == 200
+    assert hired.json()["state"] == "hired"
+
+    # Idempotent: a second click is not an error.
+    again = api.post(f"/api/candidates/{candidate_id}/hire", headers=a)
+    assert again.status_code == 200
+    assert again.json()["state"] == "hired"
+
+    # And it survives a reload, because it is a row and not a piece of
+    # frontend state.
+    reloaded = api.get(f"/api/candidates/{candidate_id}", headers=a)
+    assert reloaded.json()["state"] == "hired"
+
+
+def test_hiring_is_not_a_way_to_reverse_a_rejection(api, two_accounts):
+    a = auth(two_accounts["a"]["token"])
+    candidate_id = two_accounts["candidate"]["id"]
+    api.post(f"/api/candidates/{candidate_id}/reject", headers=a)
+
+    response = api.post(f"/api/candidates/{candidate_id}/hire", headers=a)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "candidate_already_decided"
+    assert storage.get_candidate(candidate_id)["state"] == "rejected"
+
+
+def test_rejecting_is_not_a_way_to_reverse_a_hire(api, two_accounts):
+    a = auth(two_accounts["a"]["token"])
+    candidate_id = two_accounts["candidate"]["id"]
+    storage.set_candidate_state(candidate_id, "interviewed")
+    api.post(f"/api/candidates/{candidate_id}/hire", headers=a)
+
+    response = api.post(f"/api/candidates/{candidate_id}/reject", headers=a)
+    assert response.status_code == 409
+    assert storage.get_candidate(candidate_id)["state"] == "hired"
+
+
+def test_approving_does_not_walk_a_hired_candidate_backwards(api, two_accounts):
+    """Same rule the SQL function carries: a candidate already further
+    along is left where they are."""
+    a = auth(two_accounts["a"]["token"])
+    candidate_id = two_accounts["candidate"]["id"]
+    api.post(f"/api/candidates/{candidate_id}/approve", headers=a)
+    storage.set_candidate_state(candidate_id, "hired")
+
+    again = api.post(f"/api/candidates/{candidate_id}/approve", headers=a)
+    assert again.json()["state"] == "hired"
+
+
+def test_hiring_against_a_database_without_the_migration_says_so(
+    api, two_accounts, monkeypatch
+):
+    """The one route that can outrun its own database. A raw check-constraint
+    violation is a 500 nobody can read during a demo."""
+    a = auth(two_accounts["a"]["token"])
+    candidate_id = two_accounts["candidate"]["id"]
+    storage.set_candidate_state(candidate_id, "interviewed")
+
+    def refuse(*_args, **_kwargs):
+        raise RuntimeError(
+            '{"code":"23514","message":"new row for relation \\"candidates\\" '
+            'violates check constraint \\"candidates_state_check\\""}'
+        )
+
+    monkeypatch.setattr(storage, "set_candidate_state", refuse)
+    response = api.post(f"/api/candidates/{candidate_id}/hire", headers=a)
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "schema_out_of_date"
+    assert "004_hired_state.sql" in response.json()["error"]["message"]
+
+
+def test_a_hired_candidate_is_told_the_outcome_and_no_more(api, two_accounts):
+    """The candidate portal rule holds for the good outcome too: they are
+    told where they stand, never a number and never any terms."""
+    a = auth(two_accounts["a"]["token"])
+    candidate_id = two_accounts["candidate"]["id"]
+    storage.set_candidate_state(candidate_id, "interviewed")
+    api.post(f"/api/candidates/{candidate_id}/hire", headers=a)
+
+    email = storage.get_candidate(candidate_id)["email"]
+    rows = api.get("/api/applications", params={"email": email}).json()
+    assert rows[0]["status"] == "offer"
+    assert rows[0]["status_label"] == "Offer"
+    assert "score" not in rows[0]["status_detail"].lower()
 
 
 # ---------------------------------------------------------------------

@@ -325,6 +325,7 @@ export type ApplicationStatus =
   | "interview_ready"
   | "interview_in_progress"
   | "interview_complete"
+  | "offer"
   | "closed";
 
 export interface CandidateApplication {
@@ -350,6 +351,7 @@ export type CandidateState =
   | "approved"
   | "interviewing"
   | "interviewed"
+  | "hired"
   | "rejected";
 
 export interface EvidenceOut {
@@ -548,6 +550,10 @@ export const api = {
     request<ApprovalResult>(`/candidates/${candidateId}/approve`, { method: "POST" }),
   rejectCandidate: (candidateId: string) =>
     request<CandidateSummary>(`/candidates/${candidateId}/reject`, { method: "POST" }),
+  /** The other terminal decision. Separate from approveCandidate, which
+   *  means approved for interview and mints a token. */
+  hireCandidate: (candidateId: string) =>
+    request<CandidateSummary>(`/candidates/${candidateId}/hire`, { method: "POST" }),
   rescreenCandidate: (candidateId: string) =>
     request<CandidateDetail>(`/candidates/${candidateId}/rescreen`, { method: "POST" }),
   reparseResume: (candidateId: string) =>

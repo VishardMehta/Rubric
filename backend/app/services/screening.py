@@ -6,7 +6,7 @@ database, which is what the consistency harness does.
 
 from __future__ import annotations
 
-from app.core.heuristics import RUBRIC_GENERATION_MAX_RETRIES
+from app.core.heuristics import SCREENING_MAX_RETRIES
 from app.integrations.llm import generate_structured
 from app.models import Rubric, Screening
 from app.services.prompts import render_rubric_block, screening_prompts
@@ -43,5 +43,5 @@ def screen_candidate(
         validate=lambda result: validate_screening(
             result, rubric, transcript, resume_text
         ),
-        max_retries=RUBRIC_GENERATION_MAX_RETRIES,
+        max_retries=SCREENING_MAX_RETRIES,
     )

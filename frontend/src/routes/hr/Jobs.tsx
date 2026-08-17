@@ -133,15 +133,37 @@ function OverviewPulse({
           </div>
           <span className="text-caption">Across active roles</span>
         </div>
-        <div className="rb-overview-pulse__stages">
-          {stages.map((stage) => (
-            <div key={stage.label} className="rb-overview-pulse__stage">
-              <span>{stage.label}</span>
-              <div aria-hidden="true"><i style={{ width: `${Math.max(8, (stage.value / largest) * 100)}%` }} /></div>
-              <strong>{stage.value}</strong>
-            </div>
-          ))}
-        </div>
+        {overview.applicants === 0 ? (
+          // Nobody has applied yet. The bars used to sit at a floor of 8%
+          // so a non-zero stage stayed visible, which meant three filled
+          // bars over three zeroes: a pipeline drawn for candidates who do
+          // not exist.
+          <p className="rb-overview-pulse__empty">
+            No applications yet. This fills in as candidates apply to your
+            active roles.
+          </p>
+        ) : (
+          <div className="rb-overview-pulse__stages">
+            {stages.map((stage) => (
+              <div key={stage.label} className="rb-overview-pulse__stage">
+                <span>{stage.label}</span>
+                {/* The 8% floor keeps a stage with one candidate visible.
+                    It applies only to a stage that actually has one. */}
+                <div aria-hidden="true">
+                  <i
+                    style={{
+                      width:
+                        stage.value === 0
+                          ? "0%"
+                          : `${Math.max(8, (stage.value / largest) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <strong>{stage.value}</strong>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <aside className="rb-overview-pulse__focus">
         <p className="text-label">Hiring focus</p>

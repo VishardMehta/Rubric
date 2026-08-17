@@ -31,6 +31,10 @@ export function InterviewResultPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Cleared first, so one candidate's interview result never renders
+    // under another candidate's URL while the new one loads.
+    setResult(null);
+    setFailure(null);
     api
       .getInterviewResult(candidateId)
       .then((loaded) => !cancelled && setResult(loaded))

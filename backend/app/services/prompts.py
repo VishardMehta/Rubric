@@ -136,6 +136,12 @@ than paraphrase. Once the evidence is in front of you, award the points it \
 supports. Where that source shows nothing for a criterion, record no \
 evidence and award 0.
 
+If you find yourself writing a quote you cannot point to character for \
+character in that source, that is the signal to award 0 for the criterion \
+and leave its evidence empty. A 0 with no evidence is a real result and \
+the hiring team reads it as one. A tidied or reconstructed quote is not: \
+it attributes words to a person who did not write them.
+
 Award points for demonstrated work: systems built and run, decisions the \
 candidate made and why, problems hit and how they were handled, scale and \
 constraints they worked within. Where a candidate names a technology \
@@ -734,6 +740,13 @@ named person.
 Return null, or an empty list, for anything absent. A sparse resume is a \
 real resume, not a failure, and a null field is honest where a guess is \
 not.
+
+Links are addresses, not labels. Put a string in links when the resume \
+text contains the address itself: https://github.com/name, \
+linkedin.com/in/name, someone.dev. Extracting a PDF usually keeps the \
+anchor text of a hyperlink and drops the target, so a lone "GitHub", \
+"Kaggle" or "Portfolio" is a label with no address behind it. Leave those \
+out and return [] if that is all there was.
 
 Separate work from projects. Jobs, internships and substantial positions \
 of responsibility are experience. Course projects and personal builds are \

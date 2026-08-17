@@ -34,9 +34,9 @@ def create_app() -> FastAPI:
     # one nobody remembers is on.
     if settings.demo_auth:
         logging.getLogger("rubric").warning(
-            "DEMO_AUTH is on: any email and any password will sign in, and the "
-            "candidate portal falls back to showing every application. Never "
-            "run this way outside a demo."
+            "DEMO_AUTH is on: any email and any password will sign in as an "
+            "HR account. Ownership scoping still applies, so each account "
+            "sees only its own roles. Never run this way outside a demo."
         )
 
     install_error_handlers(app)

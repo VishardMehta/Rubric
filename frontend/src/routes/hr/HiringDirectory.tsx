@@ -47,7 +47,10 @@ export function HiringDirectoryPage({ mode }: { mode: DirectoryMode }) {
     ? "Review every applicant across your open roles."
     : "Keep scheduled and completed interviews in one calm queue.";
   const filteredRows = useMemo(() => {
-    const eligible = (rows ?? []).filter((row) => mode === "candidates" || ["approved", "interviewing", "interviewed"].includes(row.state));
+    // 'hired' belongs in the interview queue too: the interview still
+    // happened, and it is the record you go back to when you want to know
+    // why the hire was made.
+    const eligible = (rows ?? []).filter((row) => mode === "candidates" || ["approved", "interviewing", "interviewed", "hired"].includes(row.state));
     const normalized = query.trim().toLowerCase();
     if (!normalized) return eligible;
     return eligible.filter((row) => `${row.name} ${row.email} ${row.job.title}`.toLowerCase().includes(normalized));
@@ -80,7 +83,7 @@ export function HiringDirectoryPage({ mode }: { mode: DirectoryMode }) {
               <div className="rb-directory__head" aria-hidden="true">
                 <span>Candidate</span>
                 <span>Role</span>
-                <span>Score</span>
+                <span>Scores</span>
                 <span>Status</span>
                 <span>Action</span>
               </div>
@@ -94,7 +97,9 @@ export function HiringDirectoryPage({ mode }: { mode: DirectoryMode }) {
 }
 
 function DirectoryRowCard({ row, mode }: { row: DirectoryRow; mode: DirectoryMode }) {
-  const completed = row.state === "interviewed";
+  // The result page only exists if there was an interview, so this reads
+  // the interview rather than the state a hire may have moved past.
+  const completed = row.interview_status === "complete" || row.interview_status === "evaluated";
   const href = completed && mode === "interviews"
     ? `/jobs/${row.job.id}/candidates/${row.id}/interview`
     : `/jobs/${row.job.id}/candidates/${row.id}`;
@@ -105,7 +110,12 @@ function DirectoryRowCard({ row, mode }: { row: DirectoryRow; mode: DirectoryMod
         <small>{row.email}</small>
       </span>
       <span className="rb-directory__role">{row.job.title}</span>
-      <span className="rb-directory__score"><ScoreInline score={row.screening_score} band={row.screening_band} /></span>
+      {/* Both numbers, in one cell so the row keeps its five columns.
+          An em-space where a score does not exist yet, never a zero. */}
+      <span className="rb-directory__score">
+        <span>Screening <ScoreInline score={row.screening_score} band={row.screening_band} /></span>
+        <span>Interview <ScoreInline score={row.interview_score} band={row.interview_band} /></span>
+      </span>
       <span className="rb-directory__chips">
         {mode === "candidates" ? <RecommendationChip recommendation={row.recommendation} /> : null}
         <StatusChip state={row.state} />

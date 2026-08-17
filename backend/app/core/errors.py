@@ -14,6 +14,8 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.core.config import get_settings
+
 logger = logging.getLogger("rubric")
 
 
@@ -163,11 +165,60 @@ class AlreadyApplied(RubricError):
     )
 
 
+class SchemaOutOfDate(RubricError):
+    """A write the code supports and the database does not, because a
+    migration in database/ has not been run against this project.
+
+    Named rather than left as a 500. The failure is real and the fix is one
+    file, so the message says which file instead of making someone read a
+    constraint name out of a stack trace mid-demo."""
+
+    code = "schema_out_of_date"
+    status_code = 500
+    retryable = False
+    default_message = "This database is missing a migration from database/."
+
+
+class CandidateAlreadyDecided(RubricError):
+    """Hiring someone who has been rejected, or rejecting someone who has
+    been hired. Both are terminal, and there is no route back out of either:
+    reversing a decision means reopening the application, which is out of
+    scope. A clear 409 beats writing a state that contradicts the one
+    already recorded."""
+
+    code = "candidate_already_decided"
+    status_code = 409
+    retryable = False
+    default_message = "A final decision has already been recorded for this candidate."
+
+
 class CandidateNotFound(RubricError):
     code = "candidate_not_found"
     status_code = 404
     retryable = False
     default_message = "That candidate could not be found."
+
+
+class DatabaseUnavailable(RubricError):
+    """The database did not answer, after retries.
+
+    Distinct from the backend being down, and the distinction is the whole
+    point of this class. A bare 500 here reached the frontend, which mapped
+    it to "Rubric could not reach the server" - so a running backend with a
+    briefly unreachable database read as a dead backend, and the person
+    debugging went looking at uvicorn instead of at Supabase.
+
+    503 rather than 500: the request was well formed and the service is
+    temporarily unable to serve it. Retryable, because it usually is.
+    """
+
+    code = "database_unavailable"
+    status_code = 503
+    retryable = True
+    default_message = (
+        "Rubric could not reach its database. This is usually a paused "
+        "Supabase project or a brief network drop. Try again in a moment."
+    )
 
 
 class RateLimited(RubricError):
@@ -264,7 +315,7 @@ def install_error_handlers(app: FastAPI) -> None:
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         request_id = str(uuid.uuid4())
         logger.exception("request_id=%s unhandled error at %s", request_id, request.url.path)
-        return JSONResponse(
+        response = JSONResponse(
             status_code=500,
             content={
                 "error": {
@@ -274,3 +325,27 @@ def install_error_handlers(app: FastAPI) -> None:
                 }
             },
         )
+        _allow_origin(request, response)
+        return response
+
+
+def _allow_origin(request: Request, response: JSONResponse) -> None:
+    """Put the CORS header back on a 500.
+
+    This handler runs inside Starlette's ServerErrorMiddleware, which sits
+    *outside* CORSMiddleware, so its response never passes through the
+    middleware that would add Access-Control-Allow-Origin. The browser then
+    blocks a response the backend did send, fetch() throws, and the
+    frontend reports "Rubric could not reach the server" for a backend that
+    is running and answering.
+
+    That is how a database blip read as a dead process, and it cost real
+    debugging time looking at uvicorn instead of at Supabase.
+
+    The origin is echoed only when it is already on the configured
+    allowlist, so this does not widen CORS - it stops a 500 from silently
+    narrowing it.
+    """
+    origin = request.headers.get("origin")
+    if origin and origin in get_settings().cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin

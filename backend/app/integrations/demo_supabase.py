@@ -398,7 +398,9 @@ class DemoClient:
             )
 
         state = candidate.get("state")
-        if state not in ("approved", "interviewing", "interviewed"):
+        # Same list as approve_candidate_atomic in database/004_hired_state.sql:
+        # a candidate who is already further along does not get walked back.
+        if state not in ("approved", "interviewing", "interviewed", "hired"):
             candidate["state"] = "approved"
             state = "approved"
 

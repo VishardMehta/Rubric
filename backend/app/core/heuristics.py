@@ -34,6 +34,21 @@ BAND_BORDERLINE_MIN = 45
 SCREENING_RESUME_WEIGHT = 0.60
 SCREENING_VOICE_WEIGHT = 0.40
 
+# Screening gets a larger retry budget than any other stage, and the reason
+# is what a failure costs. A rubric that fails to generate can be
+# regenerated from the job page. A screening that fails takes the whole
+# application down with it: the candidate has just recorded a two minute
+# introduction, and they see an error instead of a confirmation.
+#
+# It is also the stage with the most ways to violate validation - two full
+# components, every quote checked against its own source, both totals
+# checked against their own sums - so a single retry was spending the
+# budget on the first of several fixable mistakes.
+#
+# Not unbounded. Each attempt is a real Gemini call against a free tier, and
+# a model that has failed three times is not one attempt away from success.
+SCREENING_MAX_RETRIES = 3
+
 RUBRIC_MIN_CRITERIA = 4
 RUBRIC_MAX_CRITERIA = 7
 RUBRIC_TOTAL_POINTS = 100
@@ -157,6 +172,35 @@ LLM_SEED = 42
 # "preparing the next question" state, so a long wait reads as a hang.
 LLM_TRANSIENT_RETRIES = 2
 LLM_TRANSIENT_BACKOFF_SECONDS = 1.5
+
+# --- Supabase HTTP client -------------------------------------------------
+#
+# postgrest-py builds its own httpx.Client with `http2=True` hardcoded and
+# no retry. Two things then go wrong against Supabase's edge:
+#
+# 1. httpx keeps HTTP/2 connections pooled. The edge closes them when idle.
+#    httpx then writes a request onto a connection the server has already
+#    closed and httpcore raises RemoteProtocolError("Server disconnected"),
+#    which surfaced as a 500 on GET /api/jobs/{id} and made a live backend
+#    look unreachable.
+# 2. httpx does not retry that, because the request was already sent.
+#
+# So the client is configured explicitly. HTTP/1.1 because the multiplexing
+# HTTP/2 buys is worthless at this request volume and its long-lived
+# connections are exactly what goes stale, and a keepalive window short
+# enough that we drop connections before the edge does.
+SUPABASE_HTTP2 = False
+SUPABASE_KEEPALIVE_EXPIRY_SECONDS = 15.0
+SUPABASE_MAX_KEEPALIVE_CONNECTIONS = 5
+SUPABASE_CONNECT_TIMEOUT_SECONDS = 10.0
+SUPABASE_READ_TIMEOUT_SECONDS = 30.0
+# Retries inside the transport cover failures to establish a connection.
+SUPABASE_TRANSPORT_RETRIES = 2
+# A separate retry above the client covers the case the transport cannot:
+# a connection that was open when the request was written and closed before
+# the response came back. Only ever applied to reads, which are idempotent.
+SUPABASE_READ_RETRIES = 2
+SUPABASE_READ_RETRY_BACKOFF_SECONDS = 0.25
 
 # --- Consistency harness ---------------------------------------------------
 # backend.md section 11. There is no ground truth for screening scores, so

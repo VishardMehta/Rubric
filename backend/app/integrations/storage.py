@@ -11,13 +11,25 @@ not. signed_url() resolves a path at response time.
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
+import time
+from functools import lru_cache, wraps
 from typing import Any
 
-from supabase import Client, create_client
+import httpx
+from supabase import Client, ClientOptions, create_client
 
 from app.core.config import get_settings
-from app.core.errors import AlreadyApplied, EmailAlreadyRegistered, RubricError
+from app.core.errors import AlreadyApplied, DatabaseUnavailable, EmailAlreadyRegistered, RubricError
+from app.core.heuristics import (
+    SUPABASE_CONNECT_TIMEOUT_SECONDS,
+    SUPABASE_HTTP2,
+    SUPABASE_KEEPALIVE_EXPIRY_SECONDS,
+    SUPABASE_MAX_KEEPALIVE_CONNECTIONS,
+    SUPABASE_READ_RETRIES,
+    SUPABASE_READ_RETRY_BACKOFF_SECONDS,
+    SUPABASE_READ_TIMEOUT_SECONDS,
+    SUPABASE_TRANSPORT_RETRIES,
+)
 from app.models import Rubric
 
 logger = logging.getLogger("rubric.storage")
@@ -27,6 +39,26 @@ BUCKET_ANSWERS = "answers"
 BUCKET_RESUMES = "resumes"
 
 SIGNED_URL_TTL_SECONDS = 60 * 60  # one hour, ample for one page view
+
+# Signed URLs are handed back out for a while rather than minted fresh on
+# every request, keyed by (bucket, path).
+#
+# The URL carries a signature in its query string, so a freshly minted one
+# is a different URL for the same bytes. The browser treats it as a new
+# resource and downloads the whole recording again, every single time the
+# page is opened - and an interview result page holds one player per
+# answer. Returning the same URL inside its lifetime is what lets the HTTP
+# cache do its job, and it also drops ten signing round trips per page view
+# to zero after the first.
+#
+# The margin means a cached URL is never handed out close enough to expiry
+# to die mid-playback.
+_SIGNED_URL_CACHE: dict[tuple[str, str], tuple[float, str]] = {}
+SIGNED_URL_REUSE_MARGIN_SECONDS = 5 * 60
+# A ceiling so a long-running process cannot accumulate one entry per
+# object forever. Small: this is a localhost demo, and a miss costs one
+# round trip.
+SIGNED_URL_CACHE_MAX = 512
 
 
 class StorageNotConfigured(RubricError):
@@ -56,7 +88,93 @@ def get_client() -> Client:
 
     if not settings.supabase_url or not settings.supabase_service_role_key:
         raise StorageNotConfigured()
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return create_client(
+        settings.supabase_url,
+        settings.supabase_service_role_key,
+        ClientOptions(httpx_client=_http_client()),
+    )
+
+
+def _http_client() -> httpx.Client:
+    """The HTTP client every Supabase call goes through.
+
+    Supplied explicitly rather than left to postgrest-py, which hardcodes
+    `http2=True` and no retry. See the SUPABASE_* block in heuristics.py for
+    the failure that caused: a pooled HTTP/2 connection closed by Supabase's
+    edge, written to anyway, raising RemoteProtocolError("Server
+    disconnected") and surfacing as a 500 from a backend that was running
+    perfectly well.
+
+    One client is shared by postgrest, storage and auth, which is how
+    supabase-py wires `httpx_client`. The read timeout is therefore sized
+    for the slowest of the three, a resume upload, not for a row query.
+    """
+    return httpx.Client(
+        http2=SUPABASE_HTTP2,
+        timeout=httpx.Timeout(
+            SUPABASE_READ_TIMEOUT_SECONDS, connect=SUPABASE_CONNECT_TIMEOUT_SECONDS
+        ),
+        # Expire connections before the edge does, so a stale one is far
+        # less likely to be handed out in the first place.
+        limits=httpx.Limits(
+            max_keepalive_connections=SUPABASE_MAX_KEEPALIVE_CONNECTIONS,
+            keepalive_expiry=SUPABASE_KEEPALIVE_EXPIRY_SECONDS,
+        ),
+        # Covers failures to establish a connection. It cannot cover a
+        # connection that dies mid-request, which is what `retry_reads`
+        # below is for.
+        transport=httpx.HTTPTransport(retries=SUPABASE_TRANSPORT_RETRIES),
+        follow_redirects=True,
+    )
+
+
+# The transient transport failures worth one more attempt. A closed pooled
+# connection is not a wrong request: the same call succeeds immediately on
+# a fresh connection.
+_TRANSIENT_TRANSPORT_ERRORS = (
+    httpx.RemoteProtocolError,
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.WriteError,
+    httpx.PoolTimeout,
+)
+
+
+def retry_reads(fn):
+    """Retry a read through a transient transport failure.
+
+    Only ever applied to reads. They are idempotent, so a retry cannot
+    double-insert or double-update; a write that failed after reaching the
+    database would be a different problem and is deliberately left to fail
+    loudly rather than be replayed.
+
+    After the budget is spent the error becomes DatabaseUnavailable, so the
+    API answers "the database is not responding" instead of a bare 500 that
+    the frontend then reports as the backend being unreachable.
+    """
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        last: Exception | None = None
+        for attempt in range(SUPABASE_READ_RETRIES + 1):
+            try:
+                return fn(*args, **kwargs)
+            except _TRANSIENT_TRANSPORT_ERRORS as exc:
+                last = exc
+                if attempt == SUPABASE_READ_RETRIES:
+                    break
+                logger.warning(
+                    "supabase read %s failed (%s), retrying %d/%d",
+                    fn.__name__,
+                    type(exc).__name__,
+                    attempt + 1,
+                    SUPABASE_READ_RETRIES,
+                )
+                time.sleep(SUPABASE_READ_RETRY_BACKOFF_SECONDS * (attempt + 1))
+        logger.error("supabase read %s failed after retries", fn.__name__, exc_info=last)
+        raise DatabaseUnavailable() from last
+
+    return wrapper
 
 
 # ---------------------------------------------------------------------
@@ -95,11 +213,13 @@ def create_hr_user(
     return response.data
 
 
+@retry_reads
 def get_hr_user_by_email(email: str) -> dict[str, Any] | None:
     response = get_client().table("hr_users").select("*").eq("email", email).execute()
     return response.data[0] if response.data else None
 
 
+@retry_reads
 def get_hr_user(hr_user_id: str) -> dict[str, Any] | None:
     response = get_client().table("hr_users").select("*").eq("id", hr_user_id).execute()
     return response.data[0] if response.data else None
@@ -115,6 +235,7 @@ def create_session(token: str, hr_user_id: str, expires_at: str) -> dict[str, An
     return response.data[0]
 
 
+@retry_reads
 def get_session(token: str) -> dict[str, Any] | None:
     """The session row, or None. Expiry is checked by the caller so that an
     expired session can be deleted rather than just ignored."""
@@ -179,11 +300,13 @@ def set_job_rubric(job_id: str, rubric: Rubric) -> dict[str, Any]:
     return response.data[0]
 
 
+@retry_reads
 def get_job(job_id: str) -> dict[str, Any] | None:
     response = get_client().table("jobs").select("*").eq("id", job_id).execute()
     return response.data[0] if response.data else None
 
 
+@retry_reads
 def list_jobs(owner_id: str | None = None) -> list[dict[str, Any]]:
     """Jobs newest first.
 
@@ -265,6 +388,18 @@ def _is_unique_violation(exc: Exception) -> bool:
     return "23505" in text or "candidates_one_application_per_job" in text
 
 
+def is_check_violation(exc: Exception, constraint: str) -> bool:
+    """Detect a named check-constraint violation.
+
+    Same approach as _is_unique_violation and for the same reason:
+    supabase-py surfaces PostgREST errors as a generic exception, so the
+    Postgres error code is matched in the message. 23514 is
+    check_violation.
+    """
+    text = str(exc)
+    return "23514" in text and constraint in text
+
+
 def save_screening(
     candidate_id: str,
     *,
@@ -328,6 +463,7 @@ def mark_screening_failed(candidate_id: str) -> None:
     ).execute()
 
 
+@retry_reads
 def get_candidate(candidate_id: str) -> dict[str, Any] | None:
     response = (
         get_client().table("candidates").select("*").eq("id", candidate_id).execute()
@@ -354,6 +490,7 @@ CANDIDATE_SUMMARY_COLUMNS = (
 )
 
 
+@retry_reads
 def list_candidates(job_id: str) -> list[dict[str, Any]]:
     """Ranked by score, highest first. Candidates still being screened
     have a null score and sort last."""
@@ -368,6 +505,7 @@ def list_candidates(job_id: str) -> list[dict[str, Any]]:
     return response.data or []
 
 
+@retry_reads
 def list_candidates_for_jobs(job_ids: list[str]) -> list[dict[str, Any]]:
     """Summary rows for several jobs at once, ranked by score.
 
@@ -388,6 +526,7 @@ def list_candidates_for_jobs(job_ids: list[str]) -> list[dict[str, Any]]:
     return response.data or []
 
 
+@retry_reads
 def interview_summaries(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
     """Interview status and overall score, keyed by candidate id.
 
@@ -436,6 +575,7 @@ def interview_summaries(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
     return summaries
 
 
+@retry_reads
 def job_titles(job_ids: list[str]) -> dict[str, str]:
     """Titles keyed by job id, in one query.
 
@@ -455,6 +595,7 @@ def job_titles(job_ids: list[str]) -> dict[str, str]:
     return {row["id"]: row.get("title") or "" for row in response.data or []}
 
 
+@retry_reads
 def invitations_by_candidate(candidate_ids: list[str]) -> dict[str, dict[str, Any]]:
     """Interview status, token and invite time, keyed by candidate id.
 
@@ -473,6 +614,7 @@ def invitations_by_candidate(candidate_ids: list[str]) -> dict[str, dict[str, An
     return {row["candidate_id"]: row for row in response.data or []}
 
 
+@retry_reads
 def list_candidates_by_email(email: str) -> list[dict[str, Any]]:
     """Every application from one email address, newest first.
 
@@ -496,6 +638,7 @@ def list_candidates_by_email(email: str) -> list[dict[str, Any]]:
     return response.data or []
 
 
+@retry_reads
 def list_all_candidates() -> list[dict[str, Any]]:
     """Every candidate, newest first.
 
@@ -573,6 +716,7 @@ def approve_candidate_atomic(candidate_id: str, token: str) -> dict[str, Any]:
     return response.data
 
 
+@retry_reads
 def get_interview_by_token(token: str) -> dict[str, Any] | None:
     response = (
         get_client().table("interviews").select("*").eq("token", token).execute()
@@ -580,6 +724,7 @@ def get_interview_by_token(token: str) -> dict[str, Any] | None:
     return response.data[0] if response.data else None
 
 
+@retry_reads
 def get_interview_by_candidate(candidate_id: str) -> dict[str, Any] | None:
     response = (
         get_client()
@@ -681,6 +826,7 @@ def save_answer(
     return response.data[0]
 
 
+@retry_reads
 def list_turns(interview_id: str) -> list[dict[str, Any]]:
     response = (
         get_client()
@@ -731,6 +877,7 @@ def save_interview_result(
     return response.data[0]
 
 
+@retry_reads
 def get_interview_result(interview_id: str) -> dict[str, Any] | None:
     response = (
         get_client()
@@ -747,6 +894,7 @@ def get_interview_result(interview_id: str) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------
 
 
+@retry_reads
 def pipeline_counts(job_ids: list[str]) -> dict[str, dict[str, int]]:
     """Applicant, shortlisted and interviewed counts per job.
 
@@ -796,14 +944,44 @@ def upload(bucket: str, path: str, data: bytes, content_type: str) -> str:
 
 
 def signed_url(bucket: str, path: str | None) -> str | None:
-    """Resolve a stored object path to a time limited URL."""
+    """Resolve a stored object path to a time limited URL.
+
+    Stable within its lifetime: the same object gets the same URL back
+    until the cached one is close to expiring. See _SIGNED_URL_CACHE.
+    """
     if not path:
         return None
+
+    key = (bucket, path)
+    now = time.monotonic()
+    cached = _SIGNED_URL_CACHE.get(key)
+    if cached and cached[0] > now:
+        return cached[1]
+
     try:
         response = get_client().storage.from_(bucket).create_signed_url(
             path, SIGNED_URL_TTL_SECONDS
         )
-        return response.get("signedURL") or response.get("signedUrl")
+        url = response.get("signedURL") or response.get("signedUrl")
     except Exception as exc:  # noqa: BLE001 - a missing object must not 500 the page
         logger.warning("could not sign %s/%s: %r", bucket, path, exc)
         return None
+
+    if not url:
+        return None
+
+    # Prune before inserting, and only on the way past the ceiling. A
+    # concurrent request that signs the same object twice is harmless: both
+    # URLs work, and the second write simply wins.
+    if len(_SIGNED_URL_CACHE) >= SIGNED_URL_CACHE_MAX:
+        for stale, (expires_at, _) in list(_SIGNED_URL_CACHE.items()):
+            if expires_at <= now:
+                _SIGNED_URL_CACHE.pop(stale, None)
+        if len(_SIGNED_URL_CACHE) >= SIGNED_URL_CACHE_MAX:
+            _SIGNED_URL_CACHE.clear()
+
+    _SIGNED_URL_CACHE[key] = (
+        now + SIGNED_URL_TTL_SECONDS - SIGNED_URL_REUSE_MARGIN_SECONDS,
+        url,
+    )
+    return url

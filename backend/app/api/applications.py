@@ -25,7 +25,6 @@ import logging
 
 from fastapi import APIRouter, Query
 
-from app.core.config import get_settings
 from app.integrations import storage
 from app.models import CandidateApplication
 from app.services.accounts import normalise_email
@@ -50,6 +49,18 @@ def _status(candidate_state: str, interview: dict | None) -> tuple[str, str, str
             "closed",
             "Closed",
             "This role is no longer moving forward with your application.",
+        )
+
+    if candidate_state == "hired":
+        # Checked before the interview states, which are otherwise more
+        # specific: a hired candidate has almost always been interviewed,
+        # and "Interview complete" would be the stalest possible thing to
+        # tell them. Says the outcome and stops, like every other status
+        # here: no score, and no terms.
+        return (
+            "offer",
+            "Offer",
+            "The hiring team wants to move ahead with you and will be in touch.",
         )
 
     if interview_status in ("complete", "evaluated"):
@@ -96,17 +107,17 @@ async def list_applications(
     normalised = normalise_email(email)
     rows = storage.list_candidates_by_email(normalised)
 
-    # Demo convenience. Typing an address nobody applied with returns an
-    # empty list, which during a walkthrough looks like the feature is
-    # broken rather than like the address was wrong. With demo_auth on,
-    # fall back to every application so the screen has something on it.
+    # This address's applications, and nothing else, ever.
     #
-    # A real address still returns exactly its own applications, so this
-    # only ever widens an answer that was empty. It is still a disclosure,
-    # and it is gated behind the same flag as the password bypass.
-    if not rows and get_settings().demo_auth:
-        logger.warning("DEMO_AUTH: %s has no applications, showing all", normalised)
-        rows = storage.list_all_candidates()
+    # There used to be a DEMO_AUTH fallback here: an address with no
+    # applications was shown every application on file, so the walkthrough
+    # screen was never empty. That was a data leak, not a convenience. A
+    # new candidate saw all sixteen applications in the database, including
+    # other people's, and the "My applications" tab stopped meaning what
+    # its name says.
+    #
+    # An empty list is the correct answer for someone who has not applied
+    # to anything. The screen has an empty state for exactly that.
 
     # Three queries for the whole list, not two per row. This screen loads
     # on arrival now that the portal knows who is looking, so the round

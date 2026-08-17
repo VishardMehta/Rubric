@@ -83,6 +83,8 @@ export function statusLabel(state: CandidateState): string {
       return "Interviewing";
     case "interviewed":
       return "Interviewed";
+    case "hired":
+      return "Hired";
     case "rejected":
       return "Rejected";
     default:
