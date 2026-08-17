@@ -44,11 +44,8 @@ Demofiles/
 
 # Client-facing and internal build notes. Nothing here is needed to run the
 # project, and PROJECT.md carries commercial terms.
-PROJECT.md
 CLAUDE.md
-DESIGN.md
 docs/implementation-plan.md
-docs/prior-art.md
 docs/reference/
 
 # Demo rows naming real people, and a shipped database should start empty
